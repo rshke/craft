@@ -1,6 +1,3 @@
-use tokio;
-
-
 #[tokio::main]
 async fn main() {
     let (app, listener) = craft::get_server().await;
