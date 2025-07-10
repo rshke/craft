@@ -12,7 +12,7 @@ async fn health_check_works() {
         .await
         .expect("Failed to send request");
 
-    println!("Response: {:?}", response);
+    println!("Response: {response:?}");
     assert!(response.status().is_success(), "Health check failed");
 }
 
