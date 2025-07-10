@@ -1,4 +1,4 @@
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 use craft::get_server;
 
@@ -22,7 +22,6 @@ async fn spawn_server() -> std::net::SocketAddr {
             .await
             .expect("Failed to start server");
     });
-
 
     sleep(Duration::from_secs(1)).await; // Wait for the server to start
 
