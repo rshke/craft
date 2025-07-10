@@ -1,0 +1,22 @@
+name: Basic
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Run cargo test
+              run: cargo test --verbose
+            
+            - name: Run Clippy
+              run: cargo clippy --all-targets --all-features -- -D warnings
+            
+            - name: Run fmt check
+              run: cargo fmt -- --check
