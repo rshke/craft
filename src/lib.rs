@@ -1,12 +1,12 @@
-pub async fn health_check() -> &'static str {
+use tokio::net::TcpListener;
+
+async fn health_check() -> &'static str {
     "OK"
 }
 
-pub async fn get_server() -> (axum::Router, tokio::net::TcpListener) {
+pub async fn run(listener: TcpListener) {
     let app = axum::Router::new().route("/health", axum::routing::get(health_check));
-
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    println!("Listening on {}", listener.local_addr().unwrap());
-    (app, listener)
+    axum::serve(listener, app.into_make_service())
+        .await
+        .unwrap();
 }
