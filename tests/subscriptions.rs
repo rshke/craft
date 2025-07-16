@@ -20,7 +20,7 @@ async fn subscript_works() {
         .await
         .expect("Failed to send request");
 
-    println!("Response: {:?}", response);
+    println!("Response: {response:?}");
     assert!(response.status().is_success(), "Subscription failed");
 
     let saved = sqlx::query!(
