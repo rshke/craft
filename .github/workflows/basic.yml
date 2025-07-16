@@ -26,6 +26,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Install sqlx-cli
+              run: cargo install sqlx-cli --no-default-features --features postgres
+
             - name: Migrate database
               run: sqlx migrate run --database-url postgres://postgres:password@localhost:5432/craft
 
