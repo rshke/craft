@@ -9,7 +9,7 @@ async fn main() {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], config.application_port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     println!("Listening on {}", listener.local_addr().unwrap());
-    let db_url = config.database.get_connection_without_database();
+    let db_url = config.database.get_connection();
     let pool = PgPool::connect(&db_url)
         .await
         .expect("Failed to connect to the database");
