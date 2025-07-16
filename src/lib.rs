@@ -1,11 +1,11 @@
+use sqlx::{Pool, Postgres};
 use tokio::net::TcpListener;
 
-async fn health_check() -> &'static str {
-    "OK"
-}
+pub mod configuration;
+mod routers;
 
-pub async fn run(listener: TcpListener) {
-    let app = axum::Router::new().route("/health", axum::routing::get(health_check));
+pub async fn run(listener: TcpListener, pool: Pool<Postgres>) {
+    let app = routers::get_router(pool);
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();

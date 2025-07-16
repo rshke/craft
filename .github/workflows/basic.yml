@@ -9,8 +9,28 @@ on:
 jobs:
     test:
         runs-on: ubuntu-latest
+        services:
+          postgres:
+            image: postgres:latest
+            ports:
+              - 5432:5432
+            env:
+              POSTGRES_USER: postgres
+              POSTGRES_PASSWORD: password
+              POSTGRES_DB: craft
+            options: >-
+              --health-cmd="pg_isready -U postgres"
+              --health-interval=10s
+              --health-timeout=5s
+              --health-retries=5
         steps:
             - uses: actions/checkout@v4
+
+            - name: Install sqlx-cli
+              run: cargo install sqlx-cli --no-default-features --features postgres
+
+            - name: Migrate database
+              run: sqlx migrate run --database-url postgres://postgres:password@localhost:5432/craft
 
             - name: Run cargo test
               run: cargo test --verbose
