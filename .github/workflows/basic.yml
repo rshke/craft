@@ -35,6 +35,11 @@ jobs:
             - name: Run cargo test
               run: cargo test --verbose
             
+            # make sure sqlx prepare is not out of sync 
+            # (whenthe schema of our database changes or when we add new queries)
+            - name: Run sqlx check
+              run: cargo sqlx prepare --check
+            
             - name: Run Clippy
               run: cargo clippy --all-targets --all-features -- -D warnings
             
