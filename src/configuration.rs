@@ -98,30 +98,36 @@ pub fn get_config() -> Result<Settings, ConfigError> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     #[test]
+    #[serial] // Ensure tests run in order to avoid environment conflicts
     fn test_get_local_config() {
         unsafe {
             std::env::set_var("RUNNING_ENV", "local");
         }
 
         let settings = get_config().unwrap();
-        assert!(
-            settings.app_settings.host == [127, 0, 0, 1],
+        assert_eq!(
+            settings.app_settings.host,
+            [127, 0, 0, 1],
             "Failed to load local configuration"
         );
     }
 
     #[test]
+    #[serial]
     fn test_get_production_config() {
         unsafe {
             std::env::set_var("RUNNING_ENV", "production");
         }
 
         let settings = get_config().unwrap();
-        assert!(
-            settings.app_settings.host == [0, 0, 0, 0],
+        assert_eq!(
+            settings.app_settings.host,
+            [0, 0, 0, 0],
             "Failed to load production configuration"
         );
     }
