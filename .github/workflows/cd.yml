@@ -25,10 +25,14 @@ jobs:
                 mkdir -p ~/.ssh
                 echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
                 chmod 400 ~/.ssh/github_cd.pem
+            
+            - name: Add known hosts
+              run: |
+                ssh-keyscan -H ${{ secrets.KNOWN_HOSTS }} >> ~/.ssh/known_hosts
 
             - name: Connect to server
               run: |
-                scp -i ~/.ssh/github_cd.pem craft.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST }}:~/craft.tar.gz
+                scp -i ~/.ssh/github_cd.pem craft.tar.gz -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }}:~/craft.tar.gz
 
             - name: Deploy
               run: |
