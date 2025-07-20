@@ -10,26 +10,27 @@ on:
 jobs:
     deploy:
         runs-on: ubuntu-latest
+        environment: CD
         steps:
             - uses: actions/checkout@v4
 
-            - name: build
+            - name: Build
               run: docker build -t craft:latest .
             
-            - name: zip and upload
+            - name: Zip and upload
               run: docker save craft:latest | gzip > craft.tar.gz
 
-            - name: restore ssh key
+            - name: Restore ssh key
               run: |
                 mkdir -p ~/.ssh
                 echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
                 chmod 400 ~/.ssh/github_cd.pem
 
-            - name: connect to server
+            - name: Connect to server
               run: |
                 scp -i ~/.ssh/github_cd.pem craft.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST }}:~/craft.tar.gz
 
-            - name: deploy
+            - name: Deploy
               run: |
                 ssh -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
                 docker load < ~/craft.tar.gz
@@ -38,6 +39,6 @@ jobs:
                 docker run -d --name craft -p 8000:8000 craft:latest
                 EOF
             
-            - name: cleanup
+            - name: Cleanup
               run: |
                 rm ~/.ssh/github_cd.pem
