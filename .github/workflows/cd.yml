@@ -32,12 +32,12 @@ jobs:
 
             - name: Connect to server
               run: |
-                scp -i ~/.ssh/github_cd.pem craft.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST }}:/root/craft.tar.gz
+                scp -i ~/.ssh/github_cd.pem craft.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST }}:/home/craft.tar.gz
 
             - name: Deploy
               run: |
                 ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
-                docker load < ~/craft.tar.gz
+                docker load < /home/craft.tar.gz
                 docker stop craft || true
                 docker rm craft || true
                 docker run -d --name craft -p 8000:8000 craft:latest
