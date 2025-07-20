@@ -1,1 +1,5 @@
 target/
+tests/
+.env
+migrations/
+scripts/
