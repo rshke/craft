@@ -78,10 +78,10 @@ pub fn get_config() -> Result<Settings, ConfigError> {
 
     let running_env = std::env::var("RUNNING_ENV").unwrap_or_else(|_| "local".to_string());
     let running_env: RunningEnv = running_env.as_str().parse().unwrap_or_else(|err| {
-        panic!("Failed to parse RUNNING_ENV: {}", err);
+        panic!("Failed to parse RUNNING_ENV: {err}");
     });
 
-    let app_config_file = format!("{}.yaml", running_env);
+    let app_config_file = format!("{running_env}.yaml");
 
     let config = Config::builder()
         .add_source(File::with_name(
