@@ -1,3 +1,5 @@
 app_settings:
   host: [0, 0, 0, 0]  # Default to all interfaces
   port: 8000
+database:
+  host: my-postgres

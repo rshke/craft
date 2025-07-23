@@ -5,6 +5,9 @@ on:
     push:
         branches:
             - main
+    pull_request:
+        branches:
+            - main
 
 jobs:
     migrate:
@@ -77,8 +80,9 @@ jobs:
                 docker stop craft || true
                 docker rm craft || true
                 docker run \
-                    -e CARFT_DATABASE__username=${{ secrets.DB_USERNAME }} \
-                    -e CARFT_DATABASE__password=${{ secrets.DB_PASSWORD }} \
+                    -e CARFT__DATABASE__USERNAME=${{ secrets.DB_USERNAME }} \
+                    -e CARFT__DATABASE__PASSWORD=${{ secrets.DB_PASSWORD }} \
+                    --network craft-net \
                     -d --name craft -p 8000:8000 craft:latest
                 EOF
 

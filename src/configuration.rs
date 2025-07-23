@@ -136,11 +136,21 @@ mod tests {
     fn test_get_env_config() {
         unsafe {
             std::env::set_var("CRAFT__APP_SETTINGS__PORT", "1313");
+            std::env::set_var("CRAFT__DATABASE__PASSWORD", "abc123");
+            std::env::set_var("CRAFT__DATABASE__USERNAME", "Alice");
         }
 
         let settings = get_config().unwrap();
         assert_eq!(
             settings.app_settings.port, 1313,
+            "Failed to load env configuration"
+        );
+        assert_eq!(
+            settings.database.password, "abc123",
+            "Failed to load env configuration"
+        );
+        assert_eq!(
+            settings.database.username, "Alice",
             "Failed to load env configuration"
         );
     }
