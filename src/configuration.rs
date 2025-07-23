@@ -82,7 +82,6 @@ pub fn get_config() -> Result<Settings, ConfigError> {
     });
 
     let app_config_file = format!("{running_env}.yaml");
-
     let config = Config::builder()
         .add_source(File::with_name(
             config_path
@@ -136,13 +135,12 @@ mod tests {
     #[test]
     fn test_get_env_config() {
         unsafe {
-            std::env::set_var("CRAFT_APP_SETTINGS__PORT", "1313");
+            std::env::set_var("CRAFT__APP_SETTINGS__PORT", "1313");
         }
 
         let settings = get_config().unwrap();
         assert_eq!(
-            settings.app_settings.port,
-            1313,
+            settings.app_settings.port, 1313,
             "Failed to load env configuration"
         );
     }
