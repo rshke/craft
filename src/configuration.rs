@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use config::{Config, ConfigError, File};
+use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -91,6 +91,7 @@ pub fn get_config() -> Result<Settings, ConfigError> {
                 .expect("Invalid path"),
         ))
         .add_source(File::from(config_path.join(app_config_file)))
+        .add_source(Environment::with_prefix("CRAFT").separator("__"))
         .build()?;
 
     config.try_deserialize::<Settings>()
@@ -129,6 +130,20 @@ mod tests {
             settings.app_settings.host,
             [0, 0, 0, 0],
             "Failed to load production configuration"
+        );
+    }
+
+    #[test]
+    fn test_get_env_config() {
+        unsafe {
+            std::env::set_var("CRAFT_APP_SETTINGS__PORT", "1313");
+        }
+
+        let settings = get_config().unwrap();
+        assert_eq!(
+            settings.app_settings.port,
+            1313,
+            "Failed to load env configuration"
         );
     }
 }

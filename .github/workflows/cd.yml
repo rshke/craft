@@ -8,6 +8,34 @@ on:
         branches: [ main ]
 
 jobs:
+    migrate:
+        runs-on: ubuntu-latest
+        environment: CD
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Restore ssh key
+              run: |
+                mkdir -p ~/.ssh
+                echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
+                chmod 400 ~/.ssh/github_cd.pem
+
+            - name: Add known hosts
+              run: |
+                ssh-keyscan -H ${{ secrets.KNOWN_HOSTS }} >> ~/.ssh/known_hosts
+
+            - name: Upload migration files
+              run: |
+                scp -i ~/.ssh/github_cd.pem -r migrations ${{ secrets.USERNAME }}@${{ secrets.HOST }}:/home/migrations
+
+            - name: Migrate database
+              run: |
+                DB_URL="postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@localhost:5432/craft"
+                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
+                cd /home/migrations
+                sqlx migrate run --database-url $DB_URL
+                EOF
+
     deploy:
         runs-on: ubuntu-latest
         environment: CD
@@ -48,7 +76,10 @@ jobs:
                 docker load < /home/craft.tar.gz
                 docker stop craft || true
                 docker rm craft || true
-                docker run -d --name craft -p 8000:8000 craft:latest
+                docker run \
+                    -e CARFT_DATABASE__username=${{ secrets.DB_USERNAME }} \
+                    -e CARFT_DATABASE__password=${{ secrets.DB_PASSWORD }} \
+                    -d --name craft -p 8000:8000 craft:latest
                 EOF
 
             - name: Cleanup
