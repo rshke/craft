@@ -75,13 +75,13 @@ jobs:
 
             - name: Deploy
               run: |
-                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
+                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << EOF
                 docker load < /home/craft.tar.gz
                 docker stop craft || true
                 docker rm craft || true
                 docker run \
-                    -e CARFT__DATABASE__USERNAME=${{ secrets.DB_USERNAME }} \
-                    -e CARFT__DATABASE__PASSWORD=${{ secrets.DB_PASSWORD }} \
+                    -e CRAFT__DATABASE__USERNAME=${{ secrets.DB_USERNAME }} \
+                    -e CRAFT__DATABASE__PASSWORD=${{ secrets.DB_PASSWORD }} \
                     --network craft-net \
                     -d --name craft -p 8000:8000 craft:latest
                 EOF

@@ -1,5 +1,4 @@
 database:
-  host: my-postgres
   port: 5432
   database_name: craft
   username: postgres

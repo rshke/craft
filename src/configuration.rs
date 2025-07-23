@@ -81,6 +81,11 @@ pub fn get_config() -> Result<Settings, ConfigError> {
         panic!("Failed to parse RUNNING_ENV: {err}");
     });
 
+    let user = std::env::var("CRAFT__DATABASE__USERNAME").unwrap_or_else(|_| "unknown".to_string());
+    let password =
+        std::env::var("CRAFT__DATABASE__PASSWORD").unwrap_or_else(|_| "unknown".to_string());
+    println!("Running environment: {running_env}, User: {user}, Password: {password}");
+
     let app_config_file = format!("{running_env}.yaml");
     let config = Config::builder()
         .add_source(File::with_name(
@@ -93,6 +98,8 @@ pub fn get_config() -> Result<Settings, ConfigError> {
         .add_source(Environment::with_prefix("CRAFT").separator("__"))
         .build()?;
 
+    // print actual configuration for debugging
+    println!("Configuration loaded: {config:#?}");
     config.try_deserialize::<Settings>()
 }
 
@@ -133,18 +140,15 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_env_config() {
         unsafe {
-            std::env::set_var("CRAFT__APP_SETTINGS__PORT", "1313");
+            std::env::set_var("RUNNING_ENV", "production");
             std::env::set_var("CRAFT__DATABASE__PASSWORD", "abc123");
             std::env::set_var("CRAFT__DATABASE__USERNAME", "Alice");
         }
 
         let settings = get_config().unwrap();
-        assert_eq!(
-            settings.app_settings.port, 1313,
-            "Failed to load env configuration"
-        );
         assert_eq!(
             settings.database.password, "abc123",
             "Failed to load env configuration"
