@@ -1,11 +1,10 @@
 name: Basic
 
 on:
+    # TODO: what if jobs failed after merge?
     push:
         branches:
             - main
-    pull_request:
-        branches: [ main ]
 
 jobs:
     migrate:
@@ -31,12 +30,13 @@ jobs:
             - name: Migrate database
               run: |
                 DB_URL="postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@localhost:5432/craft"
-                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << 'EOF'
+                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << EOF
                 cd /home/migrations
                 cargo sqlx migrate run --database-url $DB_URL
                 EOF
 
     deploy:
+        needs: migrate
         runs-on: ubuntu-latest
         environment: CD
         steps:
