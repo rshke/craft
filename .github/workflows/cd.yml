@@ -2,9 +2,6 @@ name: Basic
 
 on:
     # TODO: what if jobs failed after merge?
-    push:
-        branches:
-            - main
     pull_request:
         branches:
             - main
