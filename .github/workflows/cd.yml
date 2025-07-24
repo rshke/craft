@@ -1,0 +1,95 @@
+name: Basic
+
+on:
+    # TODO: what if jobs failed after merge?
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+
+jobs:
+    migrate:
+        runs-on: ubuntu-latest
+        environment: CD
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Restore ssh key
+              run: |
+                mkdir -p ~/.ssh
+                echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
+                chmod 400 ~/.ssh/github_cd.pem
+
+            - name: Add known hosts
+              run: |
+                ssh-keyscan -H ${{ secrets.KNOWN_HOSTS }} >> ~/.ssh/known_hosts
+
+            - name: Upload migration files
+              run: |
+                scp -i ~/.ssh/github_cd.pem -r migrations ${{ secrets.USERNAME }}@${{ secrets.HOST }}:/home/migrations
+
+            - name: Migrate database
+              run: |
+                DB_URL="postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@localhost:5432/craft"
+                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << EOF
+                cd /home/migrations
+                cargo sqlx migrate run --database-url $DB_URL
+                EOF
+
+    deploy:
+        needs: migrate
+        runs-on: ubuntu-latest
+        environment: CD
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Enable gha cache
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build with GitHub Actions cache
+              uses: docker/build-push-action@v5
+              with:
+                context: .
+                push: false
+                load: true
+                tags: craft:latest
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
+
+            - name: Restore ssh key
+              run: |
+                mkdir -p ~/.ssh
+                echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
+                chmod 400 ~/.ssh/github_cd.pem
+            
+            - name: Add known hosts
+              run: |
+                ssh-keyscan -H ${{ secrets.KNOWN_HOSTS }} >> ~/.ssh/known_hosts
+
+            - name: Zip and upload
+              run: |
+                docker save craft:latest | gzip > craft.tar.gz
+                scp -i ~/.ssh/github_cd.pem craft.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST }}:/home/craft.tar.gz
+
+            - name: Deploy
+              run: |
+                ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << EOF
+                docker load < /home/craft.tar.gz
+                docker stop craft || true
+                docker rm craft || true
+                docker run \
+                    -e CRAFT__DATABASE__USERNAME=${{ secrets.DB_USERNAME }} \
+                    -e CRAFT__DATABASE__PASSWORD=${{ secrets.DB_PASSWORD }} \
+                    --network craft-net \
+                    -d --name craft -p 8000:8000 craft:latest
+                EOF
+
+            - name: Cleanup
+              run: |
+                rm ~/.ssh/github_cd.pem
+            
+            - name: Health check
+              run: |
+                curl -fsS http://${{ secrets.HOST }}:8000/health

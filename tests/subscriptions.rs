@@ -1,7 +1,7 @@
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::collections::HashMap;
 
-use craft::configuration::DBConfig;
+use craft::configuration::DBSettings;
 use craft::run;
 
 #[tokio::test]
@@ -109,7 +109,7 @@ async fn spawn_server() -> (String, PgPool) {
     (app_url, pool)
 }
 
-async fn configure_database(configuration: &DBConfig) -> PgPool {
+async fn configure_database(configuration: &DBSettings) -> PgPool {
     let mut db_connection =
         PgConnection::connect(configuration.get_connection_without_database().as_str())
             .await

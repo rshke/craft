@@ -1,6 +1,4 @@
-application_port: 8080
 database:
-  host: localhost
   port: 5432
   database_name: craft
   username: postgres
