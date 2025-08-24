@@ -1,6 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 use sqlx::PgPool;
+use tracing::{instrument};
 
 #[derive(Deserialize, Debug)]
 pub struct User {
@@ -8,12 +9,31 @@ pub struct User {
     pub email: String,
 }
 
-pub(crate) async fn subscript(State(pool): State<PgPool>, Json(user): Json<User>) -> StatusCode {
+#[instrument(
+    name = "Adding a new subscriber",
+    skip(pool, user),
+    fields(
+        request_id = %uuid::Uuid::new_v4(),
+        subscriber_email = %user.email,
+        subscriber_name = %user.name
+    )
+)]
+pub(crate) async fn subscript(
+    State(pool): State<PgPool>,
+    Json(user): Json<User>,
+) -> StatusCode {
     if !is_valid_name(&user.name) {
         return StatusCode::BAD_REQUEST;
     }
 
-    println!("User subscribed: {user:?}");
+    match insert_user(&pool, &user).await {
+        Ok(_) => StatusCode::OK,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[instrument(name = "Inserting a new user in the database", skip(pool, user))]
+async fn insert_user(pool: &PgPool, user: &User) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, name, email, subscribed_at)
@@ -22,18 +42,22 @@ pub(crate) async fn subscript(State(pool): State<PgPool>, Json(user): Json<User>
         user.name,
         user.email
     )
-    .execute(&pool)
+    .execute(pool)
     .await
-    .expect("Failed to insert subscription");
+    .map_err(|e| {
+        tracing::error!("Failed to execute query: {e:?}");
+        e
+    })?;
 
-    StatusCode::OK
+    Ok(())
 }
 
 fn is_valid_name(name: &str) -> bool {
     let is_empty = name.trim().is_empty();
     let is_too_long = name.len() > 256;
     let forbidden_characters = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
-    let contains_forbidden_characters = name.chars().any(|g| forbidden_characters.contains(&g));
+    let contains_forbidden_characters =
+        name.chars().any(|g| forbidden_characters.contains(&g));
 
     !(is_empty || is_too_long || contains_forbidden_characters)
 }
