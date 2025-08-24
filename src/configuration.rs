@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
-use secrecy::{SecretBox, ExposeSecret};
+use secrecy::{ExposeSecret, SecretBox};
 
 #[derive(Deserialize)]
 pub struct Settings {
@@ -73,7 +73,10 @@ impl DBSettings {
     pub fn get_connection_without_database(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}",
-            self.username, self.password.expose_secret(), self.host, self.port
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port
         )
     }
 }
@@ -159,7 +162,8 @@ mod tests {
 
         let settings = get_config().unwrap();
         assert_eq!(
-            settings.database.password.expose_secret(), "abc123",
+            settings.database.password.expose_secret(),
+            "abc123",
             "Failed to load env configuration"
         );
         assert_eq!(

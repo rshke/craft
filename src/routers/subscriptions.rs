@@ -1,7 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 use sqlx::PgPool;
-use tracing::{instrument};
+use tracing::instrument;
 
 #[derive(Deserialize, Debug)]
 pub struct User {
