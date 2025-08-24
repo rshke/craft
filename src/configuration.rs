@@ -93,11 +93,6 @@ pub fn get_config() -> Result<Settings, ConfigError> {
             panic!("Failed to parse RUNNING_ENV: {err}");
         });
 
-    // let user = std::env::var("CRAFT__DATABASE__USERNAME").unwrap_or_else(|_| "unknown".to_string());
-    // let password =
-    //     std::env::var("CRAFT__DATABASE__PASSWORD").unwrap_or_else(|_| "unknown".to_string());
-    // println!("Running environment: {running_env}, User: {user}, Password: {password}");
-
     let app_config_file = format!("{running_env}.yaml");
     let config = Config::builder()
         .add_source(File::with_name(
