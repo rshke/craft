@@ -3,6 +3,7 @@ use tokio::net::TcpListener;
 
 pub mod configuration;
 mod routers;
+pub mod telemetry;
 
 pub async fn run(listener: TcpListener, pool: Pool<Postgres>) {
     let app = routers::get_router(pool);

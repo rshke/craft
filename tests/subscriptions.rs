@@ -1,8 +1,10 @@
+use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::collections::HashMap;
 
 use craft::configuration::DBSettings;
 use craft::run;
+use craft::telemetry::{get_subscriber, init_subscriber};
 
 #[tokio::test]
 async fn subscript_works() {
@@ -44,7 +46,8 @@ async fn subscript_works() {
 async fn subscrpit_return_422_err() {
     let (app_url, _) = spawn_server().await;
     // table-driven test
-    let invalid_users_field = vec![("name_", "email"), ("name", "email_"), ("name_", "email_")];
+    let invalid_users_field =
+        vec![("name_", "email"), ("name", "email_"), ("name_", "email_")];
 
     for (name_field, email_field) in invalid_users_field {
         let mut map = HashMap::new();
@@ -93,8 +96,32 @@ async fn subscript_return_400_err() {
     }
 }
 
+static INIT_SUBSCRIBER: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "debug".to_string();
+    let subscriber_name = "test".to_string();
+
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(
+            subscriber_name,
+            default_filter_level,
+            std::io::stdout,
+        );
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(
+            subscriber_name,
+            default_filter_level,
+            std::io::sink,
+        );
+        init_subscriber(subscriber);
+    }
+});
+
 async fn spawn_server() -> (String, PgPool) {
-    let mut app_config = craft::configuration::get_config().expect("Failed to load configuration");
+    Lazy::force(&INIT_SUBSCRIBER);
+
+    let mut app_config = craft::configuration::get_config()
+        .expect("Failed to load configuration");
     app_config.database.database_name = format!(
         "test_{}",
         uuid::Uuid::new_v4().to_string().replace('-', "_")
@@ -110,12 +137,16 @@ async fn spawn_server() -> (String, PgPool) {
 }
 
 async fn configure_database(configuration: &DBSettings) -> PgPool {
-    let mut db_connection =
-        PgConnection::connect(configuration.get_connection_without_database().as_str())
-            .await
-            .expect("Failed to connect to postgres server");
+    let mut db_connection = PgConnection::connect(
+        configuration.get_connection_without_database().as_str(),
+    )
+    .await
+    .expect("Failed to connect to postgres server");
     db_connection
-        .execute(format!("CREATE DATABASE {};", configuration.database_name).as_str())
+        .execute(
+            format!("CREATE DATABASE {};", configuration.database_name)
+                .as_str(),
+        )
         .await
         .expect("Failed to create database");
     db_connection

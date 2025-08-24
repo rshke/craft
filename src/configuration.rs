@@ -3,6 +3,8 @@ use std::{fmt, str::FromStr};
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
+use secrecy::{ExposeSecret, SecretBox};
+
 #[derive(Deserialize)]
 pub struct Settings {
     pub app_settings: AppSettings,
@@ -18,7 +20,7 @@ pub struct AppSettings {
 #[derive(Deserialize)]
 pub struct DBSettings {
     pub username: String,
-    pub password: String,
+    pub password: SecretBox<String>,
     pub host: String,
     pub port: u16,
     pub database_name: String,
@@ -60,31 +62,36 @@ impl DBSettings {
     pub fn get_connection(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/{}",
-            self.username, self.password, self.host, self.port, self.database_name
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
+            self.database_name
         )
     }
 
     pub fn get_connection_without_database(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}",
-            self.username, self.password, self.host, self.port
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port
         )
     }
 }
 
 pub fn get_config() -> Result<Settings, ConfigError> {
-    let current_dir = std::env::current_dir().expect("Failed to get current directory");
+    let current_dir =
+        std::env::current_dir().expect("Failed to get current directory");
     let config_path = current_dir.join("configurations");
 
-    let running_env = std::env::var("RUNNING_ENV").unwrap_or_else(|_| "local".to_string());
-    let running_env: RunningEnv = running_env.as_str().parse().unwrap_or_else(|err| {
-        panic!("Failed to parse RUNNING_ENV: {err}");
-    });
-
-    let user = std::env::var("CRAFT__DATABASE__USERNAME").unwrap_or_else(|_| "unknown".to_string());
-    let password =
-        std::env::var("CRAFT__DATABASE__PASSWORD").unwrap_or_else(|_| "unknown".to_string());
-    println!("Running environment: {running_env}, User: {user}, Password: {password}");
+    let running_env =
+        std::env::var("RUNNING_ENV").unwrap_or_else(|_| "local".to_string());
+    let running_env: RunningEnv =
+        running_env.as_str().parse().unwrap_or_else(|err| {
+            panic!("Failed to parse RUNNING_ENV: {err}");
+        });
 
     let app_config_file = format!("{running_env}.yaml");
     let config = Config::builder()
@@ -99,7 +106,7 @@ pub fn get_config() -> Result<Settings, ConfigError> {
         .build()?;
 
     // print actual configuration for debugging
-    println!("Configuration loaded: {config:#?}");
+    // println!("Configuration loaded: {config:#?}");
     config.try_deserialize::<Settings>()
 }
 
@@ -150,7 +157,8 @@ mod tests {
 
         let settings = get_config().unwrap();
         assert_eq!(
-            settings.database.password, "abc123",
+            settings.database.password.expose_secret(),
+            "abc123",
             "Failed to load env configuration"
         );
         assert_eq!(

@@ -1,4 +1,5 @@
 #!/bin/sh
-cargo test || exit 1
 cargo clippy --all-targets --all-features -- -D warnings || exit 1
 cargo fmt --all -- --check || exit 1
+cargo +nightly udeps --all-targets || exit 1
+cargo test || exit 1

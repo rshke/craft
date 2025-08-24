@@ -4,9 +4,13 @@ use craft::run;
 
 #[tokio::test]
 async fn health_check_works() {
-    let settings = craft::configuration::get_config().expect("Failed to load configuration");
+    let settings = craft::configuration::get_config()
+        .expect("Failed to load configuration");
 
-    let addr = std::net::SocketAddr::from((settings.app_settings.host, settings.app_settings.port));
+    let addr = std::net::SocketAddr::from((
+        settings.app_settings.host,
+        settings.app_settings.port,
+    ));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let addr = listener.local_addr().unwrap();
 
