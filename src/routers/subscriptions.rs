@@ -1,3 +1,4 @@
+use crate::domain::SubscriberName;
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -5,7 +6,7 @@ use tracing::instrument;
 
 #[derive(Deserialize, Debug)]
 pub struct User {
-    pub name: String,
+    pub name: SubscriberName,
     pub email: String,
 }
 
@@ -15,17 +16,13 @@ pub struct User {
     fields(
         request_id = %uuid::Uuid::new_v4(),
         subscriber_email = %user.email,
-        subscriber_name = %user.name
+        subscriber_name = %user.name.as_ref()
     )
 )]
 pub(crate) async fn subscript(
     State(pool): State<PgPool>,
     Json(user): Json<User>,
 ) -> StatusCode {
-    if !is_valid_name(&user.name) {
-        return StatusCode::BAD_REQUEST;
-    }
-
     match insert_user(&pool, &user).await {
         Ok(_) => StatusCode::OK,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -39,7 +36,7 @@ async fn insert_user(pool: &PgPool, user: &User) -> Result<(), sqlx::Error> {
         INSERT INTO subscriptions (id, name, email, subscribed_at)
         VALUES (gen_random_uuid(), $1, $2, NOW())
         "#,
-        user.name,
+        user.name.as_ref(),
         user.email
     )
     .execute(pool)
@@ -50,14 +47,4 @@ async fn insert_user(pool: &PgPool, user: &User) -> Result<(), sqlx::Error> {
     })?;
 
     Ok(())
-}
-
-fn is_valid_name(name: &str) -> bool {
-    let is_empty = name.trim().is_empty();
-    let is_too_long = name.len() > 256;
-    let forbidden_characters = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
-    let contains_forbidden_characters =
-        name.chars().any(|g| forbidden_characters.contains(&g));
-
-    !(is_empty || is_too_long || contains_forbidden_characters)
 }
