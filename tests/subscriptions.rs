@@ -43,7 +43,7 @@ async fn subscript_works() {
 }
 
 #[tokio::test]
-async fn subscrpit_return_422_err() {
+async fn subscrpit_return_422_err_for_incorrect_fields() {
     let (app_url, _) = spawn_server().await;
     // table-driven test
     let invalid_users_field =
@@ -65,13 +65,13 @@ async fn subscrpit_return_422_err() {
         assert_eq!(
             response.status(),
             reqwest::StatusCode::UNPROCESSABLE_ENTITY,
-            "Expected 422 Bad Request for invalid user data"
+            "Expected 422 error for invalid user data"
         );
     }
 }
 
 #[tokio::test]
-async fn subscript_return_400_err() {
+async fn subscript_return_422_err_for_incorrect_values() {
     let (app_url, _) = spawn_server().await;
     let invalid_users_field = vec![("", "a email"), ("  ", "a email")];
 
@@ -90,8 +90,8 @@ async fn subscript_return_400_err() {
 
         assert_eq!(
             response.status(),
-            reqwest::StatusCode::BAD_REQUEST,
-            "Expected 400 Bad Request for invalid user data"
+            reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+            "Expected 422 error for invalid user data"
         );
     }
 }

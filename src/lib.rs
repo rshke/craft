@@ -2,6 +2,7 @@ use sqlx::{Pool, Postgres};
 use tokio::net::TcpListener;
 
 pub mod configuration;
+pub mod domain;
 mod routers;
 pub mod telemetry;
 

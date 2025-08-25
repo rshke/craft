@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 axum = "0.8.4"
+claim = "0.5.0"
 config = "0.15.13"
 dotenvy = "0.15.7"
 log = "0.4.27"
