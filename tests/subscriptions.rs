@@ -12,7 +12,7 @@ async fn subscript_works() {
 
     let mut map = HashMap::new();
     map.insert("name", "rust");
-    map.insert("email", "json");
+    map.insert("email", "noisy_drop@example.com");
 
     let client = reqwest::Client::new();
     let response = client
@@ -34,7 +34,7 @@ async fn subscript_works() {
     .fetch_one(&pool)
     .await
     .expect("Failed to fetch saved subscription");
-    assert!(saved.email == "json");
+    assert!(saved.email == map["email"]);
     assert!(
         saved.name == "rust",
         "Expected name to be 'rust', got '{}'",
@@ -73,7 +73,13 @@ async fn subscrpit_return_422_err_for_incorrect_fields() {
 #[tokio::test]
 async fn subscript_return_422_err_for_incorrect_values() {
     let (app_url, _) = spawn_server().await;
-    let invalid_users_field = vec![("", "a email"), ("  ", "a email")];
+    let invalid_users_field = vec![
+        ("", "email@gmail.com"),
+        ("  ", "email@gmail.com"),
+        ("Noisy Drop", ""),
+        ("Noisy Drop", "@gmail.com"),
+        ("Noisy Drop", "noisy_drop.gmail.com"),
+    ];
 
     for (name, email) in invalid_users_field {
         let mut map = HashMap::new();
@@ -91,7 +97,7 @@ async fn subscript_return_422_err_for_incorrect_values() {
         assert_eq!(
             response.status(),
             reqwest::StatusCode::UNPROCESSABLE_ENTITY,
-            "Expected 422 error for invalid user data"
+            "Expected 422 error for invalid user data: {map:?}"
         );
     }
 }
