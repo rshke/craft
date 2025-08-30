@@ -9,16 +9,16 @@ impl FromStr for SubscriberEmail {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.validate_email() {
-            return Ok(Self(s.to_string()))
+            Ok(Self(s.to_string()))
         } else {
-            return Err("Invalid email.".to_string())
+            Err("Invalid email.".to_string())
         }
     }
 }
 
 impl AsRef<str> for SubscriberEmail {
     fn as_ref(&self) -> &str {
-        return &self.0
+        &self.0
     }
 }
 
@@ -32,7 +32,6 @@ impl<'de> serde::Deserialize<'de> for SubscriberEmail {
         s.parse().map_err(serde::de::Error::custom)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -59,8 +58,7 @@ mod tests {
     }
 
     use fake::faker::internet::en::SafeEmail;
-    use rand::{rngs::StdRng, SeedableRng};
-    // use quickcheck::
+    use rand::{SeedableRng, rngs::StdRng};
     #[derive(Debug, Clone)]
     struct ValidEmailFixture(String);
 

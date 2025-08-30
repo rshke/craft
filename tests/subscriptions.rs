@@ -74,7 +74,7 @@ async fn subscrpit_return_422_err_for_incorrect_fields() {
 async fn subscript_return_422_err_for_incorrect_values() {
     let (app_url, _) = spawn_server().await;
     let invalid_users_field = vec![
-        ("", "email@gmail.com"), 
+        ("", "email@gmail.com"),
         ("  ", "email@gmail.com"),
         ("Noisy Drop", ""),
         ("Noisy Drop", "@gmail.com"),

@@ -69,7 +69,7 @@ mod tests {
     fn names_containing_forbidden_characters_are_rejected() {
         for name in &['/', '(', ')', '"', '<', '>', '\\', '{', '}'] {
             let name = name.to_string();
-            assert_err!(SubscriberName::try_from(name)); 
+            assert_err!(SubscriberName::try_from(name));
         }
     }
 

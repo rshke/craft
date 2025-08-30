@@ -23,7 +23,10 @@ pub(crate) async fn subscript(
 }
 
 #[instrument(name = "Inserting a new user in the database", skip(pool, user))]
-async fn insert_user(pool: &PgPool, user: &Subscriber) -> Result<(), sqlx::Error> {
+async fn insert_user(
+    pool: &PgPool,
+    user: &Subscriber,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, name, email, subscribed_at)
