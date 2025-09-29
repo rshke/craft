@@ -3,3 +3,9 @@ database:
   database_name: craft
   username: postgres
   password: password
+
+email_client:
+  base_url: localhost
+  sender: pierre@go.com
+  authorization_token: my-secret-token
+  # timeout_milliseconds: 10000

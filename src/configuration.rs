@@ -5,10 +5,13 @@ use serde::Deserialize;
 
 use secrecy::{ExposeSecret, SecretBox};
 
+use crate::domain::subscriber_email::SubscriberEmail;
+
 #[derive(Deserialize)]
 pub struct Settings {
     pub app_settings: AppSettings,
     pub database: DBSettings,
+    pub email_client: EmailClientSettings,
 }
 
 #[derive(Deserialize)]
@@ -24,6 +27,19 @@ pub struct DBSettings {
     pub host: String,
     pub port: u16,
     pub database_name: String,
+}
+
+#[derive(Deserialize)]
+pub struct EmailClientSettings {
+    pub base_url: String,
+    pub sender: SubscriberEmail,
+    pub authorization_token: SecretBox<String>,
+    #[serde(default = "default_timeout_milliseconds")]
+    pub timeout_milliseconds: u64,
+}
+
+fn default_timeout_milliseconds() -> u64 {
+    10_000
 }
 
 enum RunningEnv {
@@ -71,8 +87,11 @@ impl DBSettings {
     }
 
     pub fn get_connection_without_database(&self) -> String {
+        // postgres requires a db name when clients try to connect to it.
+        // if no db specified, it will try to use the db that has same name as user name
+        // here we use the builtin db postgres
         format!(
-            "postgres://{}:{}@{}:{}",
+            "postgres://{}:{}@{}:{}/postgres",
             self.username,
             self.password.expose_secret(),
             self.host,
@@ -127,6 +146,14 @@ mod tests {
         assert_eq!(
             settings.app_settings.host,
             [127, 0, 0, 1],
+            "Failed to load local configuration"
+        );
+        assert_eq!(
+            settings.email_client.base_url, "localhost",
+            "Failed to load local email client's base url"
+        );
+        assert_eq!(
+            settings.email_client.timeout_milliseconds, 10_000,
             "Failed to load local configuration"
         );
     }
