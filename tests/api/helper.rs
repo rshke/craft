@@ -18,7 +18,7 @@ impl TestApp {
         body: &HashMap<&'static str, &'static str>,
     ) -> reqwest::Response {
         reqwest::Client::new()
-            .post(&format!("{}/subscriptions", &self.address))
+            .post(format!("{}/subscriptions", &self.address))
             .json(body)
             .send()
             .await
@@ -70,15 +70,16 @@ pub async fn spawn_app() -> TestApp {
 
     TestApp {
         address: app_url,
-        pool: pool,
+        pool,
     }
 }
 
 async fn configure_database(configuration: &DBSettings) -> PgPool {
     let url = configuration.get_connection_without_database();
-    let mut db_connection = PgConnection::connect(&url).await.expect(
-        format!("Failed to connect to postgres server: {}", url).as_str(),
-    );
+    let mut db_connection =
+        PgConnection::connect(&url).await.unwrap_or_else(|_| {
+            panic!("Failed to connect to postgres server: {}", url)
+        });
     db_connection
         .execute(
             format!("CREATE DATABASE {};", configuration.database_name)
