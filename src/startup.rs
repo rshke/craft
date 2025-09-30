@@ -38,7 +38,7 @@ impl Application {
 
         Ok(Self {
             port: server.local_addr()?.port(),
-            server: server,
+            server,
         })
     }
 

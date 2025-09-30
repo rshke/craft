@@ -32,7 +32,7 @@ impl EmailClient {
             .build()
             .unwrap();
         Self {
-            http_client: http_client,
+            http_client,
             base_url: base_url,
             sender: sender,
             server_token: server_token,
