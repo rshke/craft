@@ -1,13 +1,25 @@
 use std::str::FromStr;
 use validator::ValidateEmail;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SubscriberEmail(String);
 
 impl FromStr for SubscriberEmail {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.validate_email() {
+            Ok(Self(s.to_string()))
+        } else {
+            Err("Invalid email.".to_string())
+        }
+    }
+}
+
+impl TryFrom<String> for SubscriberEmail {
+    type Error = String;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
         if s.validate_email() {
             Ok(Self(s.to_string()))
         } else {

@@ -1,5 +1,11 @@
 app_settings:
   host: [0, 0, 0, 0]  # Default to all interfaces
   port: 8000
+
 database:
   host: my-postgres
+
+email_client:
+  base_url: https://api.postmarkapp.com
+  sender: pierre@go.com
+  

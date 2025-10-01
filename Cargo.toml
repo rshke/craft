@@ -24,10 +24,10 @@ tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features=["env-filter"] }
 uuid = { version = "1.17.0", features = ["v4"] }
 validator = { version = "0.20", features = ["derive"] }
+reqwest = { version = "0.12.22", default-features = false,features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
 fake = "4.4.0"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.1.0"
-reqwest = { version = "0.12.22", features = ["json"] }
-
+wiremock = "0.6.5"
