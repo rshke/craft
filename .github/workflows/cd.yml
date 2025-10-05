@@ -42,6 +42,16 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Restore ssh key
+              run: |
+                mkdir -p ~/.ssh
+                echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
+                chmod 400 ~/.ssh/github_cd.pem
+            
+            - name: Add known hosts
+              run: |
+                ssh-keyscan -H ${{ secrets.KNOWN_HOSTS }} >> ~/.ssh/known_hosts
+              
             - name: Enable gha cache
               uses: docker/setup-buildx-action@v3
 
@@ -55,16 +65,6 @@ jobs:
                 cache-from: type=gha
                 cache-to: type=gha,mode=max
 
-            - name: Restore ssh key
-              run: |
-                mkdir -p ~/.ssh
-                echo "${{ secrets.SSH_KEY }}" > ~/.ssh/github_cd.pem
-                chmod 400 ~/.ssh/github_cd.pem
-            
-            - name: Add known hosts
-              run: |
-                ssh-keyscan -H ${{ secrets.KNOWN_HOSTS }} >> ~/.ssh/known_hosts
-
             - name: Zip and upload
               run: |
                 docker save craft:latest | gzip > craft.tar.gz
@@ -74,13 +74,58 @@ jobs:
               run: |
                 ssh -v -i ~/.ssh/github_cd.pem ${{ secrets.USERNAME }}@${{ secrets.HOST }} << EOF
                 docker load < /home/craft.tar.gz
-                docker stop craft || true
-                docker rm craft || true
+
+                NGINX_CONF_PATH=/home/dev/nginx/nginx.conf
+
+                # 检查当前运行颜色
+                if grep -q 'craft_blue' "\$NGINX_CONF_PATH"; then
+                    RUNNING_COLOR="blue"
+                else
+                    RUNNING_COLOR="green"
+                fi
+
+                if [ "\$RUNNING_COLOR" = "blue" ]; then
+                    NEW_COLOR="green"
+                    OLD_COLOR="blue"
+                else
+                    NEW_COLOR="blue"
+                    OLD_COLOR="green"
+                fi
+
+                echo "Current running color: \$RUNNING_COLOR"
+                echo "Deploying new color: \$NEW_COLOR"
+
+                docker stop craft_\$NEW_COLOR >/dev/null 2>&1 || true
+                docker rm craft_\$NEW_COLOR >/dev/null 2>&1 || true
+
                 docker run \
                     -e CRAFT__DATABASE__USERNAME=${{ secrets.DB_USERNAME }} \
                     -e CRAFT__DATABASE__PASSWORD=${{ secrets.DB_PASSWORD }} \
                     --network craft-net \
-                    -d --name craft -p 8000:8000 craft:latest
+                    -d --name craft_\$NEW_COLOR craft:latest
+
+                echo "✅ New container craft_\$NEW_COLOR started."
+
+                # echo "🔍 Checking health of \$NEW_COLOR ..."
+                sleep 3
+
+                # TODO
+                # echo "✅ \$NEW_COLOR passed health check!"
+
+                if [ "\$NEW_COLOR" = "green" ]; then
+                    sed -i 's/craft_blue/craft_green/g' "\$NGINX_CONF_PATH"
+                else
+                    sed -i 's/craft_green/craft_blue/g' "\$NGINX_CONF_PATH"
+                fi
+
+                docker exec nginx nginx -t
+
+                docker exec nginx nginx -s reload
+                echo "♻️  Nginx now routing to \$NEW_COLOR."
+
+                echo "🧭 Deployment completed successfully."
+                echo "ℹ️  Old container craft_\$OLD_COLOR is still running for rollback."
+
                 EOF
 
             - name: Cleanup
@@ -89,4 +134,4 @@ jobs:
             
             - name: Health check
               run: |
-                curl -fsS http://${{ secrets.HOST }}:8000/health
+                curl -fsS http://${{ secrets.HOST }}/health
