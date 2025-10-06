@@ -18,7 +18,7 @@ pub enum SubscriberStatus {
 impl fmt::Display for SubscriberStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SubscriberStatus::Confirmed => write!(f, "Confirmed"),
+            SubscriberStatus::Confirmed => write!(f, "confirmed"),
         }
     }
 }
