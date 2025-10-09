@@ -1,4 +1,4 @@
-use crate::domain::subscriber::Subscriber;
+use crate::domain::subscriber::{Subscriber, SubscriberStatus};
 use axum::{Json, extract::State, http::StatusCode};
 use sqlx::PgPool;
 use tracing::instrument;
@@ -29,11 +29,12 @@ async fn insert_user(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
-        INSERT INTO subscriptions (id, name, email, subscribed_at)
-        VALUES (gen_random_uuid(), $1, $2, NOW())
+        INSERT INTO subscriptions (id, name, email, subscribed_at, status)
+        VALUES (gen_random_uuid(), $1, $2, NOW(), $3)
         "#,
         user.name.as_ref(),
         user.email.as_ref(),
+        SubscriberStatus::Confirmed.to_string(),
     )
     .execute(pool)
     .await
