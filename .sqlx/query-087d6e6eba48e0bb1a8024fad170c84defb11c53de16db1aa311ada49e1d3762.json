@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO subscriptions (id, name, email, subscribed_at, status)\n        VALUES (gen_random_uuid(), $1, $2, NOW(), $3)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "087d6e6eba48e0bb1a8024fad170c84defb11c53de16db1aa311ada49e1d3762"
+}
