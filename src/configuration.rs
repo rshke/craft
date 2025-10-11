@@ -18,6 +18,7 @@ pub struct Settings {
 pub struct AppSettings {
     pub host: [u8; 4], // IPv4 address
     pub port: u16,
+    pub base_url: String,
 }
 
 #[derive(Deserialize)]

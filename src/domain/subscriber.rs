@@ -13,12 +13,14 @@ pub struct Subscriber {
 
 pub enum SubscriberStatus {
     Confirmed,
+    PendingConfirmation,
 }
 
 impl fmt::Display for SubscriberStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SubscriberStatus::Confirmed => write!(f, "confirmed"),
+            Self::Confirmed => write!(f, "confirmed"),
+            Self::PendingConfirmation => write!(f, "pending_confirmation"),
         }
     }
 }
