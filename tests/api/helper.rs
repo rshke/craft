@@ -2,14 +2,24 @@ use std::collections::HashMap;
 
 use craft::startup::Application;
 use craft::telemetry::{get_subscriber, init_subscriber};
+use linkify::LinkFinder;
 use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 
 use craft::configuration::DBSettings;
+use reqwest::Url;
+use wiremock::{MockServer, Request};
 
 pub struct TestApp {
     pub address: String,
+    pub port: u16,
     pub pool: PgPool,
+    pub email_server: MockServer,
+}
+
+pub struct ConfirmationLinks {
+    pub html: Url,
+    pub pain_text: Url,
 }
 
 impl TestApp {
@@ -23,6 +33,44 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute request.")
+    }
+
+    pub fn extract_links(&self, request: &Request) -> ConfirmationLinks {
+        let body: serde_json::Value =
+            serde_json::from_slice(&request.body).unwrap();
+
+        let get_link = |s: &str| {
+            let finder = LinkFinder::new();
+            let links: Vec<_> = finder
+                .links(s)
+                .filter(|l| *l.kind() == linkify::LinkKind::Url)
+                .collect();
+
+            assert_eq!(1, links.len());
+
+            links[0].as_str().to_owned()
+        };
+
+        let html_link = {
+            let raw_l = get_link(body["HtmlBody"].as_str().unwrap());
+            let mut l = Url::parse(&raw_l).unwrap();
+            l.set_port(Some(self.port)).unwrap();
+
+            l
+        };
+
+        let text_link = {
+            let raw_l = get_link(body["TextBody"].as_str().unwrap());
+            let mut l = Url::parse(&raw_l).unwrap();
+            l.set_port(Some(self.port)).unwrap();
+
+            l
+        };
+
+        ConfirmationLinks {
+            html: html_link,
+            pain_text: text_link,
+        }
     }
 }
 
@@ -50,13 +98,20 @@ static INIT_SUBSCRIBER: Lazy<()> = Lazy::new(|| {
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&INIT_SUBSCRIBER);
 
-    let mut app_config = craft::configuration::get_config()
-        .expect("Failed to load configuration");
+    let email_server = MockServer::start().await;
 
-    app_config.database.database_name = format!(
-        "test_{}",
-        uuid::Uuid::new_v4().to_string().replace('-', "_")
-    );
+    let app_config = {
+        let mut c = craft::configuration::get_config()
+            .expect("Failed to load configuration");
+
+        c.database.database_name = format!(
+            "test_{}",
+            uuid::Uuid::new_v4().to_string().replace('-', "_")
+        );
+        c.email_client.base_url = email_server.uri();
+
+        c
+    };
 
     let pool = configure_database(&app_config.database).await;
 
@@ -64,13 +119,16 @@ pub async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to build application");
 
-    let app_url = format!("http://127.0.0.1:{}", app.port());
+    let app_port = app.port();
+    let app_url = format!("http://127.0.0.1:{}", app_port);
 
     tokio::spawn(app.run_until_stop());
 
     TestApp {
         address: app_url,
+        port: app_port,
         pool,
+        email_server,
     }
 }
 

@@ -33,7 +33,11 @@ impl Application {
             settings.email_client.timeout_milliseconds,
         );
 
-        let app = routers::get_router(pool, email_client);
+        let app = routers::get_router(
+            pool,
+            email_client,
+            settings.app_settings.base_url,
+        );
         let server = axum::serve(listener, app.into_make_service());
 
         Ok(Self {
