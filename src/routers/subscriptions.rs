@@ -39,11 +39,8 @@ pub(crate) async fn subscript(
     };
 
     let token = generate_token();
-    
-    if store_token(&mut tx, subscriber_id, &token)
-        .await
-        .is_err()
-    {
+
+    if store_token(&mut tx, subscriber_id, &token).await.is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
 
