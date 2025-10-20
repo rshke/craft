@@ -4,6 +4,9 @@ mod subscriptions_confirm;
 
 use std::sync::Arc;
 
+use axum::extract::Request;
+use axum::middleware::{Next, from_fn};
+use axum::response::Response;
 use axum::routing::{get, post};
 use sqlx::{Pool, Postgres};
 use tower_http::trace::TraceLayer;
@@ -34,4 +37,14 @@ pub fn get_router(
         )
         .with_state(app_state)
         .layer(TraceLayer::new_for_http())
+        .layer(from_fn(log_app_errors))
+}
+
+async fn log_app_errors(request: Request, next: Next) -> Response {
+    let response = next.run(request).await;
+
+    if let Some(err) = response.extensions().get::<Arc<anyhow::Error>>() {
+        tracing::error!(?err, "an unexpected error occurred inside a handler");
+    }
+    response
 }
