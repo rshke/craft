@@ -1,18 +1,8 @@
-use std::collections::HashMap;
-
 use craft::domain::subscriber::SubscriberStatus;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::helper::spawn_app;
-
-fn valid_subscriber() -> HashMap<&'static str, &'static str> {
-    let mut map = HashMap::new();
-    map.insert("name", "rust");
-    map.insert("email", "noisy_drop@example.com");
-
-    map
-}
+use crate::helper::{spawn_app, valid_subscriber};
 
 #[tokio::test]
 async fn reject_with_400_for_confirmation_without_token() {

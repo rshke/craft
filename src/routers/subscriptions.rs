@@ -7,6 +7,7 @@ use crate::{
         subscriber_email::SubscriberEmail,
     },
     email_client::EmailClient,
+    routers::error_chain_fmt,
 };
 use anyhow::Context;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
@@ -15,19 +16,6 @@ use reqwest::Url;
 use sqlx::{Postgres, Transaction};
 use tracing::instrument;
 use uuid::Uuid;
-
-fn error_chain_fmt(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}\n", e)?;
-    let mut current = e.source();
-    while let Some(cause) = current {
-        writeln!(f, "Caused by:\n\t{}", cause)?;
-        current = cause.source();
-    }
-    Ok(())
-}
 
 #[derive(thiserror::Error)]
 pub enum SubscriptionError {
@@ -143,7 +131,7 @@ async fn send_confirmation_email(
     );
 
     email_client
-        .send_email(to, "Welcome", &pain_text_body, &html_body)
+        .send_email(&to, "Welcome", &pain_text_body, &html_body)
         .await
 }
 

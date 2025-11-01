@@ -1,4 +1,5 @@
 mod health_check;
+mod newsletters;
 mod subscriptions;
 mod subscriptions_confirm;
 
@@ -12,6 +13,19 @@ use sqlx::{Pool, Postgres};
 use tower_http::trace::TraceLayer;
 
 use crate::{app_state::AppState, email_client::EmailClient};
+
+fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current = e.source();
+    while let Some(cause) = current {
+        writeln!(f, "Caused by:\n\t{}", cause)?;
+        current = cause.source();
+    }
+    Ok(())
+}
 
 pub fn get_router(
     pool: Pool<Postgres>,
@@ -35,6 +49,7 @@ pub fn get_router(
             "/subscriptions/confirm",
             get(subscriptions_confirm::confirm),
         )
+        .route("/newsletters", post(newsletters::publish_newsletter))
         .with_state(app_state)
         .layer(TraceLayer::new_for_http())
         .layer(from_fn(log_app_errors))
