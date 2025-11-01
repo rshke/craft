@@ -2,8 +2,12 @@ use std::collections::HashMap;
 
 use craft::startup::Application;
 use craft::telemetry::{get_subscriber, init_subscriber};
+use fake::Fake;
+use fake::faker::internet::en::SafeEmail;
+use fake::faker::name;
 use linkify::LinkFinder;
 use once_cell::sync::Lazy;
+use serde_json::Value;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 
 use craft::configuration::DBSettings;
@@ -25,10 +29,19 @@ pub struct ConfirmationLinks {
 impl TestApp {
     pub async fn post_subscriptions(
         &self,
-        body: &HashMap<&'static str, &'static str>,
+        body: &HashMap<String, String>,
     ) -> reqwest::Response {
         reqwest::Client::new()
             .post(format!("{}/subscriptions", &self.address))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn post_newsletters(&self, body: &Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(format!("{}/newsletters", &self.address))
             .json(body)
             .send()
             .await
@@ -159,4 +172,14 @@ async fn configure_database(configuration: &DBSettings) -> PgPool {
         .expect("Failed to run migrations");
 
     pool
+}
+
+pub fn valid_subscriber() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let name: String = name::en::Name().fake();
+    let email: String = SafeEmail().fake();
+    map.insert("name".to_string(), name);
+    map.insert("email".to_string(), email);
+
+    map
 }

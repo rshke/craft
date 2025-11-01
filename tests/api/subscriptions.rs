@@ -3,15 +3,7 @@ use std::collections::HashMap;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::helper::spawn_app;
-
-fn valid_subscriber() -> HashMap<&'static str, &'static str> {
-    let mut map = HashMap::new();
-    map.insert("name", "rust");
-    map.insert("email", "noisy_drop@example.com");
-
-    map
-}
+use crate::helper::{spawn_app, valid_subscriber};
 
 #[tokio::test]
 async fn subscript_return_200_for_valid_data() {
@@ -56,7 +48,7 @@ async fn subscribe_persist_the_new_subscription() {
     .expect("Failed to fetch saved subscription");
     assert!(saved.email == map["email"]);
     assert!(
-        saved.name == "rust",
+        saved.name == map["name"],
         "Expected name to be 'rust', got '{}'",
         saved.name
     );
@@ -73,11 +65,15 @@ async fn subscribe_return_422_err_for_incorrect_fields() {
     // table-driven test
     let invalid_users_field =
         vec![("name_", "email"), ("name", "email_"), ("name_", "email_")];
+    let invalid_users_field: Vec<(String, String)> = invalid_users_field
+        .into_iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect();
 
     for (name_field, email_field) in invalid_users_field {
         let mut map = HashMap::new();
-        map.insert(name_field, "rust");
-        map.insert(email_field, "json");
+        map.insert(name_field, "rust".to_string());
+        map.insert(email_field, "json".to_string());
 
         let response = app.post_subscriptions(&map).await;
 
@@ -99,11 +95,15 @@ async fn subscript_return_422_err_for_incorrect_values() {
         ("Noisy Drop", "@gmail.com"),
         ("Noisy Drop", "noisy_drop.gmail.com"),
     ];
+    let invalid_users_field: Vec<(String, String)> = invalid_users_field
+        .into_iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect();
 
     for (name, email) in invalid_users_field {
         let mut map = HashMap::new();
-        map.insert("name", name);
-        map.insert("email", email);
+        map.insert("name".to_string(), name);
+        map.insert("email".to_string(), email);
 
         let response = app.post_subscriptions(&map).await;
 
