@@ -8,6 +8,32 @@ use wiremock::{
 use crate::helper::{ConfirmationLinks, TestApp, spawn_app, valid_subscriber};
 
 #[tokio::test]
+async fn requests_without_authorization_header_are_rejected() {
+    let app = spawn_app().await;
+
+    create_unconfirmed_subscriber(&app).await;
+
+    let response = reqwest::Client::new()
+        .post(format!("{}/newsletters", &app.address))
+        .json(&serde_json::json!({
+            "title": "Newsletter title",
+            "content": {
+                "text": "Newsletter body as plain text",
+                "html": "<p>Newsletter body as HTML</p>",
+            }
+        }))
+        .send()
+        .await
+        .expect("Failed to execute request.");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        r#"Basic realm="publish""#,
+        response.headers()["WWW-Authenticate"]
+    );
+}
+
+#[tokio::test]
 async fn donot_send_to_unconfirmed_subscribers() {
     let app = spawn_app().await;
 

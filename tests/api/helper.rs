@@ -12,6 +12,7 @@ use sqlx::{Connection, Executor, PgConnection, PgPool};
 
 use craft::configuration::DBSettings;
 use reqwest::Url;
+use uuid::Uuid;
 use wiremock::{MockServer, Request};
 
 pub struct TestApp {
@@ -40,8 +41,11 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: &Value) -> reqwest::Response {
+        let (username, password) = self.test_user().await;
+
         reqwest::Client::new()
             .post(format!("{}/newsletters", &self.address))
+            .basic_auth(username, Some(password))
             .json(body)
             .send()
             .await
@@ -84,6 +88,21 @@ impl TestApp {
             html: html_link,
             pain_text: text_link,
         }
+    }
+
+    pub async fn test_user(&self) -> (String, String) {
+        let user = sqlx::query!(
+            r#"
+            SELECT username, password
+            FROM users
+            LIMIT 1
+            "#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .expect("Failed to create test users.");
+
+        (user.username, user.password)
     }
 }
 
@@ -137,6 +156,8 @@ pub async fn spawn_app() -> TestApp {
 
     tokio::spawn(app.run_until_stop());
 
+    add_test_user(&pool).await;
+
     TestApp {
         address: app_url,
         port: app_port,
@@ -182,4 +203,19 @@ pub fn valid_subscriber() -> HashMap<String, String> {
     map.insert("email".to_string(), email);
 
     map
+}
+
+async fn add_test_user(pool: &PgPool) {
+    sqlx::query!(
+        r#"
+        INSERT INTO users (user_id, username, password)
+        VALUES ($1, $2, $3)
+        "#,
+        Uuid::new_v4(),
+        Uuid::new_v4().to_string(),
+        Uuid::new_v4().to_string(),
+    )
+    .execute(pool)
+    .await
+    .expect("Failed to create test users.");
 }
