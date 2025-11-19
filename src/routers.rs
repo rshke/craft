@@ -1,4 +1,6 @@
 mod health_check;
+mod home;
+mod login;
 mod newsletters;
 mod subscriptions;
 mod subscriptions_confirm;
@@ -50,6 +52,9 @@ pub fn get_router(
             get(subscriptions_confirm::confirm),
         )
         .route("/newsletters", post(newsletters::publish_newsletter))
+        .route("/login", get(login::login_form))
+        .route("/login", post(login::login))
+        .route("/", get(home::home))
         .with_state(app_state)
         .layer(TraceLayer::new_for_http())
         .layer(from_fn(log_app_errors))
