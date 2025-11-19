@@ -1,25 +1,23 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     Json,
     extract::State,
-    http::{HeaderMap, HeaderValue},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
 };
 use base64::prelude::*;
-use reqwest::StatusCode;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tracing::instrument;
 
 use crate::{
     app_state::AppState,
+    authentication::{AuthError, Credentials, valid_credentials},
     domain::{subscriber::SubscriberStatus, subscriber_email::SubscriberEmail},
     routers::error_chain_fmt,
-    telemetry::spawn_blocking_with_tracing,
 };
 
 #[derive(Deserialize, Debug)]
@@ -105,7 +103,16 @@ pub(crate) async fn publish_newsletter(
     tracing::Span::current()
         .record("username", tracing::field::display(&_credentials.username));
 
-    let user_id = valid_credentials(&app_state.pool, _credentials).await?;
+    let user_id = valid_credentials(&app_state.pool, _credentials)
+        .await
+        .map_err(|e| match e {
+            AuthError::InvalidCredentials(_) => {
+                PublishError::AuthError(e.into())
+            }
+            AuthError::UnexpectedError(_) => {
+                PublishError::UnexpectedError(e.into())
+            }
+        })?;
     tracing::Span::current()
         .record("user_id", tracing::field::display(&user_id));
 
@@ -144,11 +151,6 @@ pub(crate) async fn publish_newsletter(
     Ok(StatusCode::OK)
 }
 
-struct Credentials {
-    username: String,
-    password: SecretString,
-}
-
 fn basic_authentication(
     headers: &HeaderMap,
 ) -> Result<Credentials, anyhow::Error> {
@@ -182,41 +184,6 @@ fn basic_authentication(
     })
 }
 
-#[instrument(name = "Validate credentials", skip(pool, credentials))]
-async fn valid_credentials(
-    pool: &PgPool,
-    credentials: Credentials,
-) -> Result<uuid::Uuid, PublishError> {
-    let mut user_id = None;
-    // Default password hash to mitigate timing attacks
-    let mut expected_password_hash = SecretString::from(
-        "$argon2id$v=19$m=15000,t=2,p=1$\
-        gZiV/M1gPc22ElAH/Jh1Hw$\
-        CWOrkoo7oJBQ/iyh7uJ0LO2aLEfrHwTWllSAxT0zRno"
-            .to_string(),
-    );
-
-    if let Some((stored_user_id, stored_password_hash)) =
-        get_stored_credentials(pool, &credentials.username)
-            .await
-            .map_err(PublishError::UnexpectedError)?
-    {
-        user_id = Some(stored_user_id);
-        expected_password_hash = stored_password_hash;
-    }
-
-    let _ = spawn_blocking_with_tracing(move || {
-        verify_password_hash(credentials.password, expected_password_hash)
-    })
-    .await
-    .context("Failed to spawn blocking task")
-    .map_err(PublishError::UnexpectedError)?;
-
-    user_id.ok_or_else(|| {
-        PublishError::AuthError(anyhow::anyhow!("Unknown username",))
-    })
-}
-
 #[instrument(name = "get confirmed subscribers", skip(pool))]
 async fn get_confirmed_subscribers(
     pool: &PgPool,
@@ -241,47 +208,4 @@ async fn get_confirmed_subscribers(
         .collect();
 
     Ok(emails)
-}
-
-#[instrument(name = "get stored credentials", skip(pool, username))]
-async fn get_stored_credentials(
-    pool: &PgPool,
-    username: &str,
-) -> Result<Option<(uuid::Uuid, SecretString)>, anyhow::Error> {
-    let user = sqlx::query!(
-        r#"
-        SELECT user_id, password_hash
-        FROM users
-        WHERE username = $1
-        "#,
-        username
-    )
-    .fetch_optional(pool)
-    .await
-    .context("Failed to perform a query to validate auth credentials.")?
-    .map(|record| (record.user_id, SecretString::from(record.password_hash)));
-
-    Ok(user)
-}
-
-#[tracing::instrument(
-    name = "Verify password hash",
-    skip(expected_password_hash, password_candidate)
-)]
-fn verify_password_hash(
-    password_candidate: SecretString,
-    expected_password_hash: SecretString,
-) -> Result<(), PublishError> {
-    let expected_password_hash =
-        PasswordHash::new(expected_password_hash.expose_secret())
-            .context("Failed to parse stored password hash")
-            .map_err(PublishError::UnexpectedError)?;
-
-    Argon2::default()
-        .verify_password(
-            password_candidate.expose_secret().as_bytes(),
-            &expected_password_hash,
-        )
-        .context("Invalid password.")
-        .map_err(PublishError::AuthError)
 }
