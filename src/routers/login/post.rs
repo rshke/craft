@@ -11,7 +11,7 @@ use tracing::instrument;
 use crate::{
     app_state::AppState,
     authentication::{AuthError, valid_credentials},
-    routers::error_chain_fmt,
+    routers::{error_chain_fmt, session_state::TypeSession},
 };
 
 #[derive(serde::Deserialize)]
@@ -22,13 +22,14 @@ pub struct LoginForm {
 
 #[instrument(
     name = "User login",
-    skip(app_state, form),
+    skip(session, app_state, form),
     fields(
         username=tracing::field::Empty,
         user_id=tracing::field::Empty
     )
 )]
 pub async fn login(
+    session: TypeSession,
     State(app_state): State<Arc<AppState>>,
     axum::extract::Form(form): axum::extract::Form<LoginForm>,
 ) -> Result<response::Response, LoginError> {
@@ -40,19 +41,31 @@ pub async fn login(
     tracing::Span::current()
         .record("username", tracing::field::display(&_credentials.username));
 
-    let user_id = valid_credentials(&app_state.pool, _credentials)
-        .await
-        .map_err(|e| match e {
-            AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
-            AuthError::UnexpectedError(_) => {
-                LoginError::UnexpectedError(e.into())
-            }
-        })?;
+    match valid_credentials(&app_state.pool, _credentials).await {
+        Ok(user_id) => {
+            session.insert_user_id(user_id);
+            // prevent session fixation attacks
+            session.renew();
 
-    tracing::Span::current()
-        .record("user_id", tracing::field::display(&user_id));
+            tracing::Span::current()
+                .record("user_id", tracing::field::display(&user_id));
 
-    Ok(response::Redirect::to("/").into_response())
+            // Ok(response::Redirect::to("/").into_response())
+            Ok(response::Redirect::to("/admin/dashboard").into_response())
+        }
+        Err(e) => {
+            let e = match e {
+                AuthError::InvalidCredentials(_) => {
+                    LoginError::AuthError(e.into())
+                }
+                AuthError::UnexpectedError(_) => {
+                    LoginError::UnexpectedError(e.into())
+                }
+            };
+
+            Err(e)
+        }
+    }
 }
 
 #[derive(thiserror::Error)]

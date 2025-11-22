@@ -9,6 +9,8 @@ use fake::faker::internet::en::SafeEmail;
 use fake::faker::name;
 use linkify::LinkFinder;
 use once_cell::sync::Lazy;
+use reqwest::Response;
+use reqwest::redirect::Policy;
 use serde_json::Value;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::collections::HashMap;
@@ -61,6 +63,7 @@ pub struct TestApp {
     pub pool: PgPool,
     pub email_server: MockServer,
     pub test_user: TestUser,
+    api_client: reqwest::Client,
 }
 
 pub struct ConfirmationLinks {
@@ -73,7 +76,7 @@ impl TestApp {
         &self,
         body: &HashMap<String, String>,
     ) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(format!("{}/subscriptions", &self.address))
             .json(body)
             .send()
@@ -82,13 +85,22 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: &Value) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(format!("{}/newsletters", &self.address))
             .basic_auth(
                 &self.test_user.username,
                 Some(&self.test_user.password),
             )
             .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn post_login(&self, body: &Value) -> reqwest::Response {
+        self.api_client
+            .post(format!("{}/login", &self.address))
+            .form(body)
             .send()
             .await
             .expect("Failed to execute request.")
@@ -130,6 +142,18 @@ impl TestApp {
             html: html_link,
             pain_text: text_link,
         }
+    }
+
+    pub async fn get_admin_dashboard(&self) -> Response {
+        self.api_client
+            .get(format!("{}/admin/dashboard", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
     }
 }
 
@@ -186,12 +210,19 @@ pub async fn spawn_app() -> TestApp {
     let test_user = TestUser::generate();
     test_user.store(&pool).await;
 
+    let api_client = reqwest::Client::builder()
+        .cookie_store(true)
+        .redirect(Policy::none())
+        .build()
+        .unwrap();
+
     TestApp {
         address: app_url,
         port: app_port,
         pool,
         email_server,
         test_user,
+        api_client,
     }
 }
 
@@ -232,4 +263,26 @@ pub fn valid_subscriber() -> HashMap<String, String> {
     map.insert("email".to_string(), email);
 
     map
+}
+
+pub fn assert_is_redirect_to(response: &reqwest::Response, url: &str) {
+    let status = response.status();
+    assert!(
+        status.is_redirection(),
+        "Expected redirect status, got {}",
+        status
+    );
+
+    let location = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .expect("Missing Location header")
+        .to_str()
+        .expect("Invalid Location header value");
+
+    assert_eq!(
+        location, url,
+        "Expected redirect to `{}`, but got `{}`",
+        url, location
+    );
 }

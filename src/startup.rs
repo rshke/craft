@@ -1,6 +1,10 @@
 use axum::Router;
 use axum::routing::IntoMakeService;
 use axum::serve::Serve;
+use axum_session::{SessionConfig, SessionStore};
+use axum_session_redispool::SessionRedisPool;
+use redis_pool::RedisPool;
+use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
 use crate::configuration::Settings;
@@ -33,10 +37,16 @@ impl Application {
             settings.email_client.timeout_milliseconds,
         );
 
+        let session_store = Self::get_redis_store(
+            settings.app_settings.redis_url.expose_secret(),
+        )
+        .await;
+
         let app = routers::get_router(
             pool,
             email_client,
             settings.app_settings.base_url,
+            session_store,
         );
         let server = axum::serve(listener, app.into_make_service());
 
@@ -44,6 +54,22 @@ impl Application {
             port: server.local_addr()?.port(),
             server,
         })
+    }
+
+    async fn get_redis_store(
+        redis_url: &str,
+    ) -> SessionStore<SessionRedisPool> {
+        let client = redis::Client::open(redis_url)
+            .expect("Error while trying to open the redis connection");
+        let redis_pool = RedisPool::from(client);
+        let session_config = SessionConfig::default();
+
+        SessionStore::<SessionRedisPool>::new(
+            Some(redis_pool.clone().into()),
+            session_config,
+        )
+        .await
+        .expect("Failed to create redis session store.")
     }
 
     pub fn port(&self) -> u16 {
