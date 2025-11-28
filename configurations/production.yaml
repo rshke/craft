@@ -1,8 +1,8 @@
 app_settings:
   host: [0, 0, 0, 0]  # Default to all interfaces
   port: 8000
-  base_url: "www.MyWeb.com"
-  redis_url: "my_redis.url"
+  base_url: www.MyWeb.com
+  redis_url:  redis://redis_craft:6379
 
 database:
   host: my-postgres
