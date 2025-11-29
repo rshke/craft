@@ -1,7 +1,9 @@
+mod admin;
 mod health_check;
 mod home;
 mod login;
 mod newsletters;
+mod session_state;
 mod subscriptions;
 mod subscriptions_confirm;
 
@@ -11,6 +13,8 @@ use axum::extract::Request;
 use axum::middleware::{Next, from_fn};
 use axum::response::Response;
 use axum::routing::{get, post};
+use axum_session::{SessionLayer, SessionStore};
+use axum_session_redispool::SessionRedisPool;
 use sqlx::{Pool, Postgres};
 use tower_http::trace::TraceLayer;
 
@@ -33,6 +37,7 @@ pub fn get_router(
     pool: Pool<Postgres>,
     email_client: EmailClient,
     base_url: String,
+    session_store: SessionStore<SessionRedisPool>,
 ) -> axum::Router {
     // we can pass EmailClient directly through wit_state
     // we here we just want to demonstrate that with Arc, no string inside EmailClient will be cloned
@@ -54,10 +59,12 @@ pub fn get_router(
         .route("/newsletters", post(newsletters::publish_newsletter))
         .route("/login", get(login::login_form))
         .route("/login", post(login::login))
+        .route("/admin/dashboard", get(admin::dashboard::admin_dashboard))
         .route("/", get(home::home))
-        .with_state(app_state)
+        .layer(SessionLayer::new(session_store))
         .layer(TraceLayer::new_for_http())
         .layer(from_fn(log_app_errors))
+        .with_state(app_state)
 }
 
 async fn log_app_errors(request: Request, next: Next) -> Response {

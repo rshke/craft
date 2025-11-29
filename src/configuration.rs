@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
-use secrecy::{ExposeSecret, SecretBox};
+use secrecy::{ExposeSecret, SecretBox, SecretString};
 
 use crate::domain::subscriber_email::SubscriberEmail;
 
@@ -19,6 +19,7 @@ pub struct AppSettings {
     pub host: [u8; 4], // IPv4 address
     pub port: u16,
     pub base_url: String,
+    pub redis_url: SecretString,
 }
 
 #[derive(Deserialize)]
