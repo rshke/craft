@@ -20,6 +20,10 @@ impl TypeSession {
     pub fn get_user_id(&self) -> Option<Uuid> {
         self.0.get::<Uuid>(Self::USER_ID_KEY)
     }
+
+    pub fn logout(&self) {
+        self.0.destroy();
+    }
 }
 
 impl<S> FromRequestParts<S> for TypeSession

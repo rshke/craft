@@ -3,7 +3,7 @@ mod health_check;
 mod home;
 mod login;
 mod newsletters;
-mod session_state;
+pub mod session_state;
 mod subscriptions;
 mod subscriptions_confirm;
 
@@ -18,9 +18,10 @@ use axum_session_redispool::SessionRedisPool;
 use sqlx::{Pool, Postgres};
 use tower_http::trace::TraceLayer;
 
+use crate::authentication::reject_anonymous_users;
 use crate::{app_state::AppState, email_client::EmailClient};
 
-fn error_chain_fmt(
+pub fn error_chain_fmt(
     e: &impl std::error::Error,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
@@ -49,6 +50,13 @@ pub fn get_router(
         base_url,
     });
 
+    let admin_router = axum::Router::new()
+        .route("/dashboard", get(admin::admin_dashboard))
+        .route("/password", get(admin::change_password_form))
+        .route("/password", post(admin::change_password))
+        .route("/logout", post(admin::logout))
+        .layer(from_fn(reject_anonymous_users));
+
     axum::Router::new()
         .route("/health", get(health_check::health_check))
         .route("/subscriptions", post(subscriptions::subscript))
@@ -59,7 +67,7 @@ pub fn get_router(
         .route("/newsletters", post(newsletters::publish_newsletter))
         .route("/login", get(login::login_form))
         .route("/login", post(login::login))
-        .route("/admin/dashboard", get(admin::dashboard::admin_dashboard))
+        .nest("/admin", admin_router)
         .route("/", get(home::home))
         .layer(SessionLayer::new(session_store))
         .layer(TraceLayer::new_for_http())

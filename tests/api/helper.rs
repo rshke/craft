@@ -106,6 +106,14 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(format!("{}/admin/logout", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
     pub fn extract_links(&self, request: &Request) -> ConfirmationLinks {
         let body: serde_json::Value =
             serde_json::from_slice(&request.body).unwrap();
@@ -154,6 +162,18 @@ impl TestApp {
 
     pub async fn get_admin_dashboard_html(&self) -> String {
         self.get_admin_dashboard().await.text().await.unwrap()
+    }
+
+    pub async fn post_change_password<Body>(&self, body: &Body) -> Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(format!("{}/admin/password", &self.address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to post request")
     }
 }
 

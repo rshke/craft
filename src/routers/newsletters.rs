@@ -15,7 +15,7 @@ use tracing::instrument;
 
 use crate::{
     app_state::AppState,
-    authentication::{AuthError, Credentials, valid_credentials},
+    authentication::{AuthError, Credentials, validate_credentials},
     domain::{subscriber::SubscriberStatus, subscriber_email::SubscriberEmail},
     routers::error_chain_fmt,
 };
@@ -103,7 +103,7 @@ pub(crate) async fn publish_newsletter(
     tracing::Span::current()
         .record("username", tracing::field::display(&_credentials.username));
 
-    let user_id = valid_credentials(&app_state.pool, _credentials)
+    let user_id = validate_credentials(&app_state.pool, _credentials)
         .await
         .map_err(|e| match e {
             AuthError::InvalidCredentials(_) => {
