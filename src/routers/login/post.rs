@@ -10,7 +10,7 @@ use tracing::instrument;
 
 use crate::{
     app_state::AppState,
-    authentication::{AuthError, valid_credentials},
+    authentication::{AuthError, validate_credentials},
     routers::{error_chain_fmt, session_state::TypeSession},
 };
 
@@ -41,7 +41,7 @@ pub async fn login(
     tracing::Span::current()
         .record("username", tracing::field::display(&_credentials.username));
 
-    match valid_credentials(&app_state.pool, _credentials).await {
+    match validate_credentials(&app_state.pool, _credentials).await {
         Ok(user_id) => {
             session.insert_user_id(user_id);
             // prevent session fixation attacks

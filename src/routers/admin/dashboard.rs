@@ -2,39 +2,37 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::{
+    Extension,
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
 };
 use sqlx::PgPool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, routers::session_state::TypeSession};
+use crate::{app_state::AppState, authentication::UserId};
 
 #[instrument(
     name = "login admin dashboard page"
-    skip(session, app_state)
+    skip(user_id, app_state)
 )]
 pub async fn admin_dashboard(
-    // session: Session<SessionRedisPool>,
-    session: TypeSession,
+    Extension(user_id): Extension<UserId>,
     State(app_state): State<Arc<AppState>>,
 ) -> Response {
-    let username = if let Some(user_id) = session.get_user_id() {
-        match get_username(user_id, &app_state.pool).await {
-            Ok(username) => username,
-            Err(e) => {
-                tracing::info!("Failed to get username {:?}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Faied to get username {e:?}"),
-                )
-                    .into_response();
-            }
+    let user_id = user_id.into_inner();
+
+    let username = match get_username(user_id, &app_state.pool).await {
+        Ok(username) => username,
+        Err(e) => {
+            tracing::info!("Failed to get username {:?}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Faied to get username {e:?}"),
+            )
+                .into_response();
         }
-    } else {
-        return Redirect::to("/login").into_response();
     };
 
     let html_content = format!(
@@ -53,7 +51,7 @@ pub async fn admin_dashboard(
 }
 
 #[tracing::instrument(name = "Get username", skip(pool))]
-async fn get_username(
+pub async fn get_username(
     user_id: Uuid,
     pool: &PgPool,
 ) -> Result<String, anyhow::Error> {
