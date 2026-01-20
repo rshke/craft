@@ -51,7 +51,7 @@ pub async fn reject_anonymous_users(request: Request, next: Next) -> Response {
             next.run(request).await
         }
         None => {
-            tracing::info!(
+            tracing::warn!(
                 "Anonymous user attempted to access a protected route."
             );
             axum::response::Redirect::to("/login").into_response()

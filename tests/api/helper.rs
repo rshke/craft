@@ -86,11 +86,7 @@ impl TestApp {
 
     pub async fn post_newsletters(&self, body: &Value) -> reqwest::Response {
         self.api_client
-            .post(format!("{}/newsletters", &self.address))
-            .basic_auth(
-                &self.test_user.username,
-                Some(&self.test_user.password),
-            )
+            .post(format!("{}/admin/newsletters", &self.address))
             .json(body)
             .send()
             .await
@@ -232,6 +228,7 @@ pub async fn spawn_app() -> TestApp {
 
     let api_client = reqwest::Client::builder()
         .cookie_store(true)
+        // Do not follow redirects automatically
         .redirect(Policy::none())
         .build()
         .unwrap();

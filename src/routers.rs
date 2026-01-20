@@ -2,7 +2,6 @@ mod admin;
 mod health_check;
 mod home;
 mod login;
-mod newsletters;
 pub mod session_state;
 mod subscriptions;
 mod subscriptions_confirm;
@@ -55,6 +54,7 @@ pub fn get_router(
         .route("/password", get(admin::change_password_form))
         .route("/password", post(admin::change_password))
         .route("/logout", post(admin::logout))
+        .route("/newsletters", post(admin::publish_newsletter))
         .layer(from_fn(reject_anonymous_users));
 
     axum::Router::new()
@@ -64,7 +64,6 @@ pub fn get_router(
             "/subscriptions/confirm",
             get(subscriptions_confirm::confirm),
         )
-        .route("/newsletters", post(newsletters::publish_newsletter))
         .route("/login", get(login::login_form))
         .route("/login", post(login::login))
         .nest("/admin", admin_router)

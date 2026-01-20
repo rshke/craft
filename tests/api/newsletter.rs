@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use reqwest::StatusCode;
 use serde_json::json;
 use wiremock::{
@@ -5,36 +7,13 @@ use wiremock::{
     matchers::{any, method, path},
 };
 
-use crate::helper::{ConfirmationLinks, TestApp, spawn_app, valid_subscriber};
+use crate::helper::{
+    ConfirmationLinks, TestApp, assert_is_redirect_to, spawn_app,
+    valid_subscriber,
+};
 
 #[tokio::test]
-async fn requests_without_authorization_header_are_rejected() {
-    let app = spawn_app().await;
-
-    create_unconfirmed_subscriber(&app).await;
-
-    let response = reqwest::Client::new()
-        .post(format!("{}/newsletters", &app.address))
-        .json(&serde_json::json!({
-            "title": "Newsletter title",
-            "content": {
-                "text": "Newsletter body as plain text",
-                "html": "<p>Newsletter body as HTML</p>",
-            }
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(
-        r#"Basic realm="publish""#,
-        response.headers()["WWW-Authenticate"]
-    );
-}
-
-#[tokio::test]
-async fn donot_send_to_unconfirmed_subscribers() {
+async fn requests_without_login_are_rejected() {
     let app = spawn_app().await;
 
     create_unconfirmed_subscriber(&app).await;
@@ -45,6 +24,29 @@ async fn donot_send_to_unconfirmed_subscribers() {
             "text": "Newsletter body as plain text",
             "html": "<p>Newsletter body as HTML</p>",
         }
+    });
+    let response = app.post_newsletters(&body).await;
+    assert_is_redirect_to(&response, "/login");
+}
+
+#[tokio::test]
+async fn donot_send_to_unconfirmed_subscribers() {
+    let app = spawn_app().await;
+
+    create_unconfirmed_subscriber(&app).await;
+    app.post_login(&json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password,
+    }))
+    .await;
+
+    let body = serde_json::json!({
+        "title": "Newsletter title",
+        "content": {
+            "text": "Newsletter body as plain text",
+            "html": "<p>Newsletter body as HTML</p>",
+        },
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     Mock::given(any())
@@ -63,13 +65,19 @@ async fn send_to_confirmed_subscribers() {
     let app = spawn_app().await;
 
     create_confirmed_subscriber(&app).await;
+    app.post_login(&json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password,
+    }))
+    .await;
 
     let body = json!({
         "title": "Newsletter title",
         "content": {
             "text": "Newsletter body as plain text",
             "html": "<p>Newsletter body as HTML</p>",
-        }
+        },
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
     });
 
     Mock::given(any())
@@ -86,6 +94,12 @@ async fn send_to_confirmed_subscribers() {
 #[tokio::test]
 async fn return_400_for_invalid_body() {
     let app = spawn_app().await;
+
+    app.post_login(&json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password,
+    }))
+    .await;
 
     let request_bodies = vec![
         (
@@ -139,6 +153,79 @@ async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
         .unwrap();
 
     app.extract_links(request)
+}
+
+#[tokio::test]
+async fn newsletter_creation_is_idempotent() {
+    let app = spawn_app().await;
+    app.post_login(&json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password,
+    }))
+    .await;
+    create_confirmed_subscriber(&app).await;
+
+    let body = json!({
+        "title": "Newsletter title",
+        "content": {
+            "text": "Newsletter body as plain text",
+            "html": "<p>Newsletter body as HTML</p>",
+        },
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+    let response = app.post_newsletters(&body).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&app.email_server)
+        .await;
+    let response = app.post_newsletters(&body).await;
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn concurrent_push_newsletter_is_handled_gracefully() {
+    let app = spawn_app().await;
+    app.post_login(&json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password,
+    }))
+    .await;
+
+    create_confirmed_subscriber(&app).await;
+
+    let body = json!({
+        "title": "Newsletter title",
+        "content": {
+            "text": "Newsletter body as plain text",
+            "html": "<p>Newsletter body as HTML</p>",
+        },
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(200).set_delay(Duration::from_secs(2)),
+        )
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    let req1 = app.post_newsletters(&body);
+    let re12 = app.post_newsletters(&body);
+
+    let (response1, response2) = tokio::join!(req1, re12);
+
+    assert_eq!(response1.status(), response2.status());
 }
 
 async fn create_confirmed_subscriber(app: &TestApp) {

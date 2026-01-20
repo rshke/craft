@@ -6,12 +6,18 @@ use crate::routers::error_chain_fmt;
 pub enum AppError {
     #[error(transparent)]
     E500(#[from] anyhow::Error),
+    #[error("syntax error in request")]
+    E400(#[source] anyhow::Error),
+    #[error("authorization failed")]
+    E401(#[source] anyhow::Error),
 }
 
 impl AppError {
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::E500(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::E400(_) => StatusCode::BAD_REQUEST,
+            Self::E401(_) => StatusCode::UNAUTHORIZED,
         }
     }
 }
