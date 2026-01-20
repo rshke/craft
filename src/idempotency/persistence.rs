@@ -1,5 +1,3 @@
-use std::usize;
-
 use anyhow::Context;
 use axum::body::{Body, to_bytes};
 use axum::http::{HeaderName, HeaderValue, StatusCode};
@@ -93,7 +91,7 @@ pub async fn get_saved_response(
             StatusCode::from_u16(r.response_status_code.try_into()?)?;
         let mut response = Response::builder()
             .status(status_code)
-            .body(Body::try_from(r.response_body)?)?;
+            .body(Body::from(r.response_body))?;
         for HeaderPairRecord { name, value } in r.response_headers {
             let name = HeaderName::try_from(name)?;
             let value = HeaderValue::try_from(value)?;

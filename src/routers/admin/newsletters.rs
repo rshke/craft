@@ -19,9 +19,7 @@ use crate::{
     domain::{subscriber::SubscriberStatus, subscriber_email::SubscriberEmail},
     idempotency::{
         key::IdempotencyKey,
-        persistence::{
-            NextAction, get_saved_response, save_response, try_process,
-        },
+        persistence::{NextAction, save_response, try_process},
     },
     utils::AppError,
 };
