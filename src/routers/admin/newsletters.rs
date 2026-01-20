@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::{
-    Json,
+    Extension, Json,
     extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode},
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
 };
 use base64::prelude::*;
 use secrecy::SecretString;
@@ -15,15 +15,22 @@ use tracing::instrument;
 
 use crate::{
     app_state::AppState,
-    authentication::{AuthError, Credentials, validate_credentials},
+    authentication::{Credentials, UserId},
     domain::{subscriber::SubscriberStatus, subscriber_email::SubscriberEmail},
-    routers::error_chain_fmt,
+    idempotency::{
+        key::IdempotencyKey,
+        persistence::{
+            NextAction, get_saved_response, save_response, try_process,
+        },
+    },
+    utils::AppError,
 };
 
 #[derive(Deserialize, Debug)]
 pub struct Body {
     title: String,
     content: Content,
+    idempotency_key: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -32,89 +39,29 @@ pub struct Content {
     html: String,
 }
 
-#[derive(thiserror::Error)]
-pub enum PublishError {
-    #[error("Authentication failed.")]
-    AuthError(#[source] anyhow::Error),
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
-
-impl std::fmt::Debug for PublishError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
-
-impl PublishError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::AuthError(_) => StatusCode::UNAUTHORIZED,
-            Self::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
-impl IntoResponse for PublishError {
-    fn into_response(self) -> axum::response::Response {
-        #[derive(serde::Serialize)]
-        struct ErrorResponse {
-            message: String,
-            details: String,
-        }
-
-        let message = format!("{self}");
-        let details = format!("{:?}", self);
-        let body = Json(ErrorResponse { message, details });
-
-        let status_code = self.status_code();
-        let mut response = (status_code, body).into_response();
-
-        match self {
-            Self::AuthError(_) => {
-                response.headers_mut().insert(
-                    "WWW-Authenticate",
-                    HeaderValue::from_static(r#"Basic realm="publish""#),
-                );
-            }
-            Self::UnexpectedError(_) => (),
-        }
-
-        response
-            .extensions_mut()
-            .insert(Arc::new(anyhow::anyhow!(self)));
-
-        response
-    }
-}
-
 #[instrument(
     name = "Publish newsletter to confirmed users",
-    skip(app_state, headers, body),
-    fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+    skip(app_state, body)
 )]
 pub(crate) async fn publish_newsletter(
     State(app_state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    Extension(user_id): Extension<UserId>,
     Json(body): Json<Body>,
-) -> Result<StatusCode, PublishError> {
-    let _credentials =
-        basic_authentication(&headers).map_err(PublishError::AuthError)?;
-    tracing::Span::current()
-        .record("username", tracing::field::display(&_credentials.username));
+) -> Result<Response, AppError> {
+    let idempotency_key: IdempotencyKey =
+        body.idempotency_key.try_into().map_err(AppError::E400)?;
 
-    let user_id = validate_credentials(&app_state.pool, _credentials)
-        .await
-        .map_err(|e| match e {
-            AuthError::InvalidCredentials(_) => {
-                PublishError::AuthError(e.into())
+    let tx =
+        match try_process(&app_state.pool, &idempotency_key, user_id).await? {
+            NextAction::StartProcessing(t) => t,
+            NextAction::ReturnSavedResponse(saved_response) => {
+                tracing::debug!(
+                    "Found saved response for idempotency key: {}",
+                    idempotency_key.as_ref()
+                );
+                return Ok(saved_response);
             }
-            AuthError::UnexpectedError(_) => {
-                PublishError::UnexpectedError(e.into())
-            }
-        })?;
-    tracing::Span::current()
-        .record("user_id", tracing::field::display(&user_id));
+        };
 
     let emails = get_confirmed_subscribers(&app_state.pool).await?;
 
@@ -148,9 +95,15 @@ pub(crate) async fn publish_newsletter(
         }
     }
 
-    Ok(StatusCode::OK)
+    let response = StatusCode::OK.into_response();
+    let response = save_response(tx, idempotency_key, user_id, response)
+        .await
+        .map_err(AppError::E500)?;
+    Ok(response)
 }
 
+#[deprecated(note = "Use session to manage authentication")]
+#[allow(dead_code)]
 fn basic_authentication(
     headers: &HeaderMap,
 ) -> Result<Credentials, anyhow::Error> {
