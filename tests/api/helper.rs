@@ -2,6 +2,9 @@ use argon2::Argon2;
 use argon2::password_hash::PasswordHasher;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
+use craft::configuration::Settings;
+use craft::email_client::EmailClient;
+use craft::issue_delivery_worker::{ExecutionOutput, try_execute_task};
 use craft::startup::Application;
 use craft::telemetry::{get_subscriber, init_subscriber};
 use fake::Fake;
@@ -64,6 +67,7 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub test_user: TestUser,
     api_client: reqwest::Client,
+    email_client: EmailClient,
 }
 
 pub struct ConfirmationLinks {
@@ -171,6 +175,18 @@ impl TestApp {
             .await
             .expect("Failed to post request")
     }
+
+    pub async fn dispatch_all_pending_emails(&self) {
+        loop {
+            if let ExecutionOutput::EmptyEqueue =
+                try_execute_task(&self.pool, &self.email_client)
+                    .await
+                    .unwrap()
+            {
+                break;
+            }
+        }
+    }
 }
 
 static INIT_SUBSCRIBER: Lazy<()> = Lazy::new(|| {
@@ -199,18 +215,7 @@ pub async fn spawn_app() -> TestApp {
 
     let email_server = MockServer::start().await;
 
-    let app_config = {
-        let mut c = craft::configuration::get_config()
-            .expect("Failed to load configuration");
-
-        c.database.database_name = format!(
-            "test_{}",
-            uuid::Uuid::new_v4().to_string().replace('-', "_")
-        );
-        c.email_client.base_url = email_server.uri();
-
-        c
-    };
+    let app_config = get_test_config(email_server.uri());
 
     let pool = configure_database(&app_config.database).await;
 
@@ -233,6 +238,10 @@ pub async fn spawn_app() -> TestApp {
         .build()
         .unwrap();
 
+    // TODO: unable to clone Setting
+    let app_config = get_test_config(email_server.uri());
+    let email_client = app_config.email_client.client();
+
     TestApp {
         address: app_url,
         port: app_port,
@@ -240,7 +249,21 @@ pub async fn spawn_app() -> TestApp {
         email_server,
         test_user,
         api_client,
+        email_client,
     }
+}
+
+fn get_test_config(email_server_uri: String) -> Settings {
+    let mut c = craft::configuration::get_config()
+        .expect("Failed to load configuration");
+
+    c.database.database_name = format!(
+        "test_{}",
+        uuid::Uuid::new_v4().to_string().replace('-', "_")
+    );
+    c.email_client.base_url = email_server_uri;
+
+    c
 }
 
 async fn configure_database(configuration: &DBSettings) -> PgPool {
