@@ -6,6 +6,7 @@ use serde::Deserialize;
 use secrecy::{ExposeSecret, SecretBox, SecretString};
 
 use crate::domain::subscriber_email::SubscriberEmail;
+use crate::email_client::EmailClient;
 
 #[derive(Deserialize)]
 pub struct Settings {
@@ -14,7 +15,7 @@ pub struct Settings {
     pub email_client: EmailClientSettings,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct AppSettings {
     pub host: [u8; 4], // IPv4 address
     pub port: u16,
@@ -38,6 +39,17 @@ pub struct EmailClientSettings {
     pub authorization_token: SecretBox<String>,
     #[serde(default = "default_timeout_milliseconds")]
     pub timeout_milliseconds: u64,
+}
+
+impl EmailClientSettings {
+    pub fn client(self) -> EmailClient {
+        EmailClient::new(
+            self.base_url,
+            self.sender,
+            self.authorization_token,
+            self.timeout_milliseconds,
+        )
+    }
 }
 
 fn default_timeout_milliseconds() -> u64 {

@@ -8,7 +8,6 @@ use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
 use crate::configuration::Settings;
-use crate::email_client::EmailClient;
 use crate::routers;
 
 type Server = Serve<tokio::net::TcpListener, IntoMakeService<Router>, Router>;
@@ -30,12 +29,7 @@ impl Application {
         let pool = PgPool::connect_lazy(&db_url)
             .expect("Failed to connect to the database");
 
-        let email_client = EmailClient::new(
-            settings.email_client.base_url,
-            settings.email_client.sender,
-            settings.email_client.authorization_token,
-            settings.email_client.timeout_milliseconds,
-        );
+        let email_client = settings.email_client.client();
 
         let session_store = Self::get_redis_store(
             settings.app_settings.redis_url.expose_secret(),
@@ -76,8 +70,9 @@ impl Application {
         self.port
     }
 
-    pub async fn run_until_stop(self) {
-        tracing::info!("Listening on {}", self.server.local_addr().unwrap());
+    pub async fn run_until_stop(self) -> Result<(), anyhow::Error> {
+        tracing::info!("Listening on {}", self.server.local_addr()?);
         let _ = self.server.await;
+        Ok(())
     }
 }

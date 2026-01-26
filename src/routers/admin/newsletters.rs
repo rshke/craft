@@ -10,7 +10,7 @@ use axum::{
 use base64::prelude::*;
 use secrecy::SecretString;
 use serde::Deserialize;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use tracing::instrument;
 
 use crate::{
@@ -39,7 +39,11 @@ pub struct Content {
 
 #[instrument(
     name = "Publish newsletter to confirmed users",
-    skip(app_state, body)
+    skip_all,
+    fields(
+        // reborrow user_id to avoid moving it
+        user_id = %&*user_id,
+    )
 )]
 pub(crate) async fn publish_newsletter(
     State(app_state): State<Arc<AppState>>,
@@ -49,7 +53,7 @@ pub(crate) async fn publish_newsletter(
     let idempotency_key: IdempotencyKey =
         body.idempotency_key.try_into().map_err(AppError::E400)?;
 
-    let tx =
+    let mut tx =
         match try_process(&app_state.pool, &idempotency_key, user_id).await? {
             NextAction::StartProcessing(t) => t,
             NextAction::ReturnSavedResponse(saved_response) => {
@@ -61,37 +65,19 @@ pub(crate) async fn publish_newsletter(
             }
         };
 
-    let emails = get_confirmed_subscribers(&app_state.pool).await?;
-
-    for email in emails {
-        match email {
-            Ok(email) => {
-                app_state
-                    .email_client
-                    .send_email(
-                        &email,
-                        &body.title,
-                        &body.content.text,
-                        &body.content.html,
-                    )
-                    .await
-                    .with_context(|| {
-                        format!("Failed to send newsletter issue to {}", email)
-                    })?;
-            }
-            Err(error) => {
-                tracing::warn!(
-                    // We record the error chain as a structured field
-                    // on the log record.
-                    error.cause_chain = ?error,
-                    // Using `\` to split a long string literal over
-                    // two lines, without creating a `\n` character.
-                    "Skipping a confirmed subscriber. \
-                    Their stored contact details are invalid",
-                );
-            }
-        }
-    }
+    let newsletter_issue_id = save_newsletter_issue(
+        &mut tx,
+        &body.title,
+        &body.content.text,
+        &body.content.html,
+    )
+    .await
+    .context("Failed to store newsletter issue detailes")
+    .map_err(AppError::E500)?;
+    enqueue_delivery_tasks(&mut tx, newsletter_issue_id)
+        .await
+        .context("Failed to enqueue delivery tasks")
+        .map_err(AppError::E500)?;
 
     let response = StatusCode::OK.into_response();
     let response = save_response(tx, idempotency_key, user_id, response)
@@ -135,6 +121,7 @@ fn basic_authentication(
     })
 }
 
+#[allow(dead_code)]
 #[instrument(name = "get confirmed subscribers", skip(pool))]
 async fn get_confirmed_subscribers(
     pool: &PgPool,
@@ -159,4 +146,56 @@ async fn get_confirmed_subscribers(
         .collect();
 
     Ok(emails)
+}
+
+#[instrument(skip_all)]
+async fn save_newsletter_issue(
+    tx: &mut Transaction<'static, Postgres>,
+    title: &str,
+    text_content: &str,
+    html_content: &str,
+) -> Result<uuid::Uuid, anyhow::Error> {
+    let newsletter_issue_id = uuid::Uuid::new_v4();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO newsletter_issues (
+            newsletter_issue_id,
+            title,
+            text_content,
+            html_content,
+            published_at
+        )
+        VALUES ($1, $2, $3, $4, NOW())
+        "#,
+        newsletter_issue_id,
+        title,
+        text_content,
+        html_content
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(newsletter_issue_id)
+}
+
+#[instrument(skip_all)]
+async fn enqueue_delivery_tasks(
+    tx: &mut Transaction<'static, Postgres>,
+    newsletter_issue_id: uuid::Uuid,
+) -> Result<(), anyhow::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO issue_delivery_queue (
+            newsletter_issue_id, subscriber_email
+        )
+        SELECT $1, email
+        FROM subscriptions
+        "#,
+        newsletter_issue_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
 }
