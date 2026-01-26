@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use reqwest::StatusCode;
 use serde_json::json;
-use tracing::instrument::WithSubscriber;
 use wiremock::{
-    Mock, MockBuilder, ResponseTemplate,
+    Mock, ResponseTemplate,
     matchers::{any, method, path},
 };
 

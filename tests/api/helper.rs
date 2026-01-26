@@ -3,7 +3,6 @@ use argon2::password_hash::PasswordHasher;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use craft::configuration::Settings;
-use craft::email_client;
 use craft::email_client::EmailClient;
 use craft::issue_delivery_worker::{ExecutionOutput, try_execute_task};
 use craft::startup::Application;
@@ -179,12 +178,12 @@ impl TestApp {
 
     pub async fn dispatch_all_pending_emails(&self) {
         loop {
-            match try_execute_task(&self.pool, &self.email_client)
-                .await
-                .unwrap()
+            if let ExecutionOutput::EmptyEqueue =
+                try_execute_task(&self.pool, &self.email_client)
+                    .await
+                    .unwrap()
             {
-                ExecutionOutput::EmptyEqueue => break,
-                _ => {}
+                break;
             }
         }
     }
