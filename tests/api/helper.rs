@@ -14,7 +14,7 @@ use linkify::LinkFinder;
 use once_cell::sync::Lazy;
 use reqwest::Response;
 use reqwest::redirect::Policy;
-use serde_json::Value;
+use serde_json::{Value, json};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::collections::HashMap;
 
@@ -106,6 +106,14 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    pub async fn login(&self) {
+        self.post_login(&json!({
+            "username": self.test_user.username,
+            "password": self.test_user.password,
+        }))
+        .await;
+    }
+
     pub async fn post_logout(&self) -> reqwest::Response {
         self.api_client
             .post(format!("{}/admin/logout", &self.address))
@@ -178,7 +186,7 @@ impl TestApp {
 
     pub async fn dispatch_all_pending_emails(&self) {
         loop {
-            if let ExecutionOutput::EmptyEqueue =
+            if let ExecutionOutput::NoAvaliableTask =
                 try_execute_task(&self.pool, &self.email_client)
                     .await
                     .unwrap()
@@ -262,6 +270,8 @@ fn get_test_config(email_server_uri: String) -> Settings {
         uuid::Uuid::new_v4().to_string().replace('-', "_")
     );
     c.email_client.base_url = email_server_uri;
+    c.email_client.retries_limit = 2;
+    c.email_client.retry_wait_seconds = 1;
 
     c
 }

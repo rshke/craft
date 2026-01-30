@@ -39,6 +39,10 @@ pub struct EmailClientSettings {
     pub authorization_token: SecretBox<String>,
     #[serde(default = "default_timeout_milliseconds")]
     pub timeout_milliseconds: u64,
+    #[serde(default = "default_retries_limit")]
+    pub retries_limit: u16,
+    #[serde(default = "default_retry_wait_seconds")]
+    pub retry_wait_seconds: u16,
 }
 
 impl EmailClientSettings {
@@ -48,12 +52,22 @@ impl EmailClientSettings {
             self.sender,
             self.authorization_token,
             self.timeout_milliseconds,
+            self.retries_limit,
+            self.retry_wait_seconds,
         )
     }
 }
 
 fn default_timeout_milliseconds() -> u64 {
     10_000
+}
+
+fn default_retries_limit() -> u16 {
+    5
+}
+
+fn default_retry_wait_seconds() -> u16 {
+    60
 }
 
 enum RunningEnv {

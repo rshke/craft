@@ -3,7 +3,7 @@ use std::time::Duration;
 use reqwest::StatusCode;
 use serde_json::json;
 use wiremock::{
-    Mock, ResponseTemplate,
+    Mock, MockBuilder, ResponseTemplate,
     matchers::{any, method, path},
 };
 
@@ -95,12 +95,7 @@ async fn send_to_confirmed_subscribers() {
 #[tokio::test]
 async fn return_400_for_invalid_body() {
     let app = spawn_app().await;
-
-    app.post_login(&json!({
-        "username": app.test_user.username,
-        "password": app.test_user.password,
-    }))
-    .await;
+    app.login().await;
 
     let request_bodies = vec![
         (
@@ -159,11 +154,7 @@ async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
 #[tokio::test]
 async fn newsletter_creation_is_idempotent() {
     let app = spawn_app().await;
-    app.post_login(&json!({
-        "username": app.test_user.username,
-        "password": app.test_user.password,
-    }))
-    .await;
+    app.login().await;
     create_confirmed_subscriber(&app).await;
 
     let body = json!({
@@ -197,12 +188,7 @@ async fn newsletter_creation_is_idempotent() {
 #[tokio::test]
 async fn concurrent_push_newsletter_is_handled_gracefully() {
     let app = spawn_app().await;
-    app.post_login(&json!({
-        "username": app.test_user.username,
-        "password": app.test_user.password,
-    }))
-    .await;
-
+    app.login().await;
     create_confirmed_subscriber(&app).await;
 
     let body = json!({
@@ -232,9 +218,65 @@ async fn concurrent_push_newsletter_is_handled_gracefully() {
     assert_eq!(response1.status(), response2.status());
 }
 
-// fn when_sending_an_email() -> MockBuilder {
-//     Mock::given(path("/email")).and(method("POST"))
-// }
+#[tokio::test]
+async fn retry_to_delivery_email_for_transient_errors() {
+    let app = spawn_app().await;
+    app.login().await;
+
+    create_confirmed_subscriber(&app).await;
+
+    let body = json!({
+        "title": "Newsletter title",
+        "content": {
+            "text": "Newsletter body as plain text",
+            "html": "<p>Newsletter body as HTML</p>",
+        },
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    when_sending_an_email()
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+    let rep = app.post_newsletters(&body).await;
+    assert_eq!(rep.status(), StatusCode::OK);
+    app.dispatch_all_pending_emails().await;
+
+    {
+        let _mock_guard = when_sending_an_email()
+            .respond_with(ResponseTemplate::new(200))
+            .named("Donot retry until scheduled time")
+            .expect(0)
+            .mount_as_scoped(&app.email_server)
+            .await;
+        app.dispatch_all_pending_emails().await;
+    }
+
+    {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let _mock_guard = when_sending_an_email()
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount_as_scoped(&app.email_server)
+            .await;
+        app.dispatch_all_pending_emails().await;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    when_sending_an_email()
+        .respond_with(ResponseTemplate::new(200))
+        .named("No task left")
+        .expect(0)
+        .mount(&app.email_server)
+        .await;
+    app.dispatch_all_pending_emails().await;
+}
+
+fn when_sending_an_email() -> MockBuilder {
+    Mock::given(path("/email")).and(method("POST"))
+}
 
 // #[tokio::test]
 // async fn transient_errors_do_not_cause_duplicate_deliveries_on_retries() {
