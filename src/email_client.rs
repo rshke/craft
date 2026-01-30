@@ -8,6 +8,8 @@ pub struct EmailClient {
     base_url: String,
     sender: SubscriberEmail,
     server_token: SecretBox<String>,
+    pub retries_limit: u16,
+    pub retry_wait_seconds: u16,
 }
 
 #[derive(Serialize)]
@@ -26,6 +28,8 @@ impl EmailClient {
         sender: SubscriberEmail,
         server_token: SecretBox<String>,
         timeout_milliseconds: u64,
+        retries_limit: u16,
+        retry_wait_seconds: u16,
     ) -> Self {
         let http_client = Client::builder()
             .timeout(std::time::Duration::from_millis(timeout_milliseconds))
@@ -36,6 +40,8 @@ impl EmailClient {
             base_url,
             sender,
             server_token,
+            retries_limit,
+            retry_wait_seconds,
         }
     }
 
@@ -111,7 +117,14 @@ mod tests {
     }
 
     fn email_client(uri: String) -> EmailClient {
-        EmailClient::new(uri, email(), SecretBox::new(Faker.fake()), 10_000)
+        EmailClient::new(
+            uri,
+            email(),
+            SecretBox::new(Faker.fake()),
+            10_000,
+            5,
+            60,
+        )
     }
 
     #[tokio::test]
