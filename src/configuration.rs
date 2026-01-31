@@ -3,12 +3,12 @@ use std::{fmt, str::FromStr};
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
-use secrecy::{ExposeSecret, SecretBox, SecretString};
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::domain::subscriber_email::SubscriberEmail;
 use crate::email_client::EmailClient;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Settings {
     pub app_settings: AppSettings,
     pub database: DBSettings,
@@ -23,20 +23,20 @@ pub struct AppSettings {
     pub redis_url: SecretString,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct DBSettings {
     pub username: String,
-    pub password: SecretBox<String>,
+    pub password: SecretString,
     pub host: String,
     pub port: u16,
     pub database_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct EmailClientSettings {
     pub base_url: String,
     pub sender: SubscriberEmail,
-    pub authorization_token: SecretBox<String>,
+    pub authorization_token: SecretString,
     #[serde(default = "default_timeout_milliseconds")]
     pub timeout_milliseconds: u64,
     #[serde(default = "default_retries_limit")]

@@ -1,13 +1,13 @@
 use crate::domain::subscriber_email::SubscriberEmail;
 use reqwest::{Client, Url};
-use secrecy::{ExposeSecret, SecretBox};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 pub struct EmailClient {
     http_client: Client,
     base_url: String,
     sender: SubscriberEmail,
-    server_token: SecretBox<String>,
+    server_token: SecretString,
     pub retries_limit: u16,
     pub retry_wait_seconds: u16,
 }
@@ -26,7 +26,7 @@ impl EmailClient {
     pub fn new(
         base_url: String,
         sender: SubscriberEmail,
-        server_token: SecretBox<String>,
+        server_token: SecretString,
         timeout_milliseconds: u64,
         retries_limit: u16,
         retry_wait_seconds: u16,
@@ -120,7 +120,7 @@ mod tests {
         EmailClient::new(
             uri,
             email(),
-            SecretBox::new(Faker.fake()),
+            SecretString::from(Faker.fake::<String>()),
             10_000,
             5,
             60,
