@@ -16,14 +16,11 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = get_config().expect("Failed to load configuration");
 
-    let app = Application::build(settings)
+    let app = Application::build(settings.clone())
         .await
         .expect("Failed to build application");
     let app_task = tokio::spawn(app.run_until_stop());
 
-    // TODO:    We are not able to clone settings as it contains SecretBox<String>.
-    //          Maybe there is a way to avoid this duplicated get_config
-    let settings = get_config().expect("Failed to load configuration");
     let worker_task = tokio::spawn(run_worker_until_stop(settings));
 
     tokio::select! {

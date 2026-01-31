@@ -227,7 +227,7 @@ pub async fn spawn_app() -> TestApp {
 
     let pool = configure_database(&app_config.database).await;
 
-    let app = Application::build(app_config)
+    let app = Application::build(app_config.clone())
         .await
         .expect("Failed to build application");
 
@@ -246,8 +246,6 @@ pub async fn spawn_app() -> TestApp {
         .build()
         .unwrap();
 
-    // TODO: unable to clone Setting
-    let app_config = get_test_config(email_server.uri());
     let email_client = app_config.email_client.client();
 
     TestApp {
