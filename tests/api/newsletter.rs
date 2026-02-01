@@ -168,6 +168,7 @@ async fn newsletter_creation_is_idempotent() {
 
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200))
+        .up_to_n_times(1)
         .expect(1)
         .mount(&app.email_server)
         .await;
@@ -178,6 +179,43 @@ async fn newsletter_creation_is_idempotent() {
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200))
         .expect(0)
+        .mount(&app.email_server)
+        .await;
+    let response = app.post_newsletters(&body).await;
+    app.dispatch_all_pending_emails().await;
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn expired_idempotency_is_cleaned() {
+    let app = spawn_app().await;
+    app.login().await;
+    create_confirmed_subscriber(&app).await;
+
+    let body = json!({
+        "title": "Newsletter title",
+        "content": {
+            "text": "Newsletter body as plain text",
+            "html": "<p>Newsletter body as HTML</p>",
+        },
+        "idempotency_key": uuid::Uuid::new_v4().to_string()
+    });
+
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(200))
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+    let response = app.post_newsletters(&body).await;
+    app.dispatch_all_pending_emails().await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    app.clean_all_idempotency().await;
+
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
         .mount(&app.email_server)
         .await;
     let response = app.post_newsletters(&body).await;
@@ -278,6 +316,12 @@ fn when_sending_an_email() -> MockBuilder {
     Mock::given(path("/email")).and(method("POST"))
 }
 
+async fn create_confirmed_subscriber(app: &TestApp) {
+    let confirm_link = create_unconfirmed_subscriber(app).await.html;
+
+    reqwest::get(confirm_link).await.unwrap();
+}
+
 // #[tokio::test]
 // async fn transient_errors_do_not_cause_duplicate_deliveries_on_retries() {
 //     let app = spawn_app().await;
@@ -328,9 +372,3 @@ fn when_sending_an_email() -> MockBuilder {
 //     app.dispatch_all_pending_emails().await;
 //     assert_eq!(req2.status(), StatusCode::OK);
 // }
-
-async fn create_confirmed_subscriber(app: &TestApp) {
-    let confirm_link = create_unconfirmed_subscriber(app).await.html;
-
-    reqwest::get(confirm_link).await.unwrap();
-}

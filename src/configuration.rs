@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{fmt, str::FromStr};
 
 use config::{Config, ConfigError, Environment, File};
@@ -21,6 +22,23 @@ pub struct AppSettings {
     pub port: u16,
     pub base_url: String,
     pub redis_url: SecretString,
+    #[serde(
+        default = "default_idempotency_ttl",
+        deserialize_with = "secs_to_duration"
+    )]
+    pub idempotency_ttl: Duration,
+}
+
+fn secs_to_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let secs = u64::deserialize(deserializer)?;
+    Ok(Duration::from_secs(secs))
+}
+
+fn default_idempotency_ttl() -> Duration {
+    Duration::from_secs(120)
 }
 
 #[derive(Deserialize, Clone)]
@@ -184,6 +202,11 @@ mod tests {
             settings.email_client.timeout_milliseconds, 10_000,
             "Failed to load local configuration"
         );
+        assert_eq!(
+            settings.app_settings.idempotency_ttl,
+            Duration::from_secs(120),
+            "Failed to load idempotency ttl"
+        )
     }
 
     #[test]

@@ -2,9 +2,12 @@ use argon2::Argon2;
 use argon2::password_hash::PasswordHasher;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
+use craft::background_workers::idempotency_expire_wroker::try_clean_expired_idempotency;
+use craft::background_workers::issue_delivery_worker::{
+    ExecutionOutput, try_execute_task,
+};
 use craft::configuration::Settings;
 use craft::email_client::EmailClient;
-use craft::issue_delivery_worker::{ExecutionOutput, try_execute_task};
 use craft::startup::Application;
 use craft::telemetry::{get_subscriber, init_subscriber};
 use fake::Fake;
@@ -17,6 +20,7 @@ use reqwest::redirect::Policy;
 use serde_json::{Value, json};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::collections::HashMap;
+use std::time::Duration;
 
 use craft::configuration::DBSettings;
 use reqwest::Url;
@@ -194,6 +198,12 @@ impl TestApp {
                 break;
             }
         }
+    }
+
+    pub async fn clean_all_idempotency(&self) {
+        try_clean_expired_idempotency(&self.pool, &Duration::from_secs(0))
+            .await
+            .unwrap();
     }
 }
 
