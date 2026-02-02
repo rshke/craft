@@ -4,14 +4,13 @@ mod home;
 mod login;
 pub mod session_state;
 mod subscriptions;
-mod subscriptions_confirm;
 
 use std::sync::Arc;
 
 use axum::extract::Request;
 use axum::middleware::{Next, from_fn};
 use axum::response::Response;
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum_session::{SessionLayer, SessionStore};
 use axum_session_redispool::SessionRedisPool;
 use sqlx::{Pool, Postgres};
@@ -49,25 +48,14 @@ pub fn get_router(
         base_url,
     });
 
-    let admin_router = axum::Router::new()
-        .route("/dashboard", get(admin::admin_dashboard))
-        .route("/password", get(admin::change_password_form))
-        .route("/password", post(admin::change_password))
-        .route("/logout", post(admin::logout))
-        .route("/newsletters", post(admin::publish_newsletter))
-        .layer(from_fn(reject_anonymous_users));
+    let admin_router = admin::router().layer(from_fn(reject_anonymous_users));
 
     axum::Router::new()
         .route("/health", get(health_check::health_check))
-        .route("/subscriptions", post(subscriptions::subscript))
-        .route(
-            "/subscriptions/confirm",
-            get(subscriptions_confirm::confirm),
-        )
-        .route("/login", get(login::login_form))
-        .route("/login", post(login::login))
-        .nest("/admin", admin_router)
         .route("/", get(home::home))
+        .merge(subscriptions::router())
+        .merge(login::router())
+        .nest("/admin", admin_router)
         .layer(SessionLayer::new(session_store))
         .layer(TraceLayer::new_for_http())
         .layer(from_fn(log_app_errors))
